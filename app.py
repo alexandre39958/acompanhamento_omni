@@ -357,7 +357,7 @@ def render_incidents(frame: pd.DataFrame) -> None:
 def main() -> None:
     inject_styles()
     improvements, incidents, errors = prepare_data()
-    st.markdown('<div class="hero"><div class="eyebrow">OMNI / Acompanhamento</div><h1>Melhorias - OMNI SESI.</h1><p>Visão executiva do portfólio de melhorias e da operação de incidentes, com dados atualizados a partir das fontes corporativas.</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero"><div class="eyebrow">OMNI / Acompanhamento</div><h1>Painel de Gestão - OMNI</h1><p>Visão executiva do portfólio de melhorias e da operação de incidentes, com dados atualizados a partir das fontes corporativas.</p></div>', unsafe_allow_html=True)
     for error in errors:
         st.warning(error)
     filtered_improvements, filtered_incidents, _, _ = render_sidebar(improvements, incidents)
