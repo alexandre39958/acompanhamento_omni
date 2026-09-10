@@ -135,6 +135,21 @@ def canonical(value: object) -> str:
     return re.sub(r"[^a-z0-9]+", "", text.lower())
 
 
+def normalize_improvement_status(value: object) -> str:
+    if pd.isna(value):
+        return "Não informado"
+    key = canonical(value)
+    if not key:
+        return "Não informado"
+    if any(term in key for term in ["conclu", "finaliz", "encerr", "resolvid"]):
+        return "Concluída"
+    if any(term in key for term in ["desenvolv", "andamento", "execucao", "fazendo", "progresso"]):
+        return "Em desenvolvimento"
+    if any(term in key for term in ["planej", "backlog", "pendente", "aguardando", "naoinici"]):
+        return "Planejada"
+    return str(value).strip()
+
+
 def resolve_column(columns: Iterable[object], aliases: Iterable[str]) -> str | None:
     by_key = {canonical(column): str(column) for column in columns}
     for alias in aliases:
@@ -220,8 +235,7 @@ def prepare_data() -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
     improvements["Fim"] = pd.to_datetime(improvements["Fim"], errors="coerce", dayfirst=True)
     if improvements["Sprint"].astype(str).str.strip().eq("").all() and not improvements.empty:
         improvements["Sprint"] = "Backlog"
-    if improvements["Status"].astype(str).str.strip().eq("").all() and not improvements.empty:
-        improvements["Status"] = "Não iniciado"
+    improvements["Status"] = improvements["Status"].map(normalize_improvement_status)
     return improvements.fillna(""), incidents.fillna(""), [error for error in [improvement_error, incident_error] if error]
 
 
@@ -249,6 +263,7 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, section:
         improvement_categories: list[str] = []
         improvement_priorities: list[str] = []
         improvement_sprints: list[str] = []
+        improvement_statuses: list[str] = []
         improvement_search = ""
         incident_categories: list[str] = []
         incident_priorities: list[str] = []
@@ -260,6 +275,7 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, section:
             improvement_categories = select_filter("Categoria", options(improvements, "Categoria"), "improvement_category")
             improvement_priorities = select_filter("Prioridade", options(improvements, "Prioridade"), "improvement_priority")
             improvement_sprints = select_filter("Sprint", options(improvements, "Sprint"), "improvement_sprint")
+            improvement_statuses = select_filter("Status", options(improvements, "Status"), "improvement_status")
             improvement_search = st.text_input("Busca textual", placeholder="Melhoria ou descrição", key="improvement_search")
         else:
             incident_categories = select_filter("Categoria", options(incidents, "Categoria"), "incident_category")
@@ -278,6 +294,7 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, section:
     filtered_improvements = apply_values(filtered_improvements, "Categoria", improvement_categories)
     filtered_improvements = apply_values(filtered_improvements, "Prioridade", improvement_priorities)
     filtered_improvements = apply_values(filtered_improvements, "Sprint", improvement_sprints)
+    filtered_improvements = apply_values(filtered_improvements, "Status", improvement_statuses)
     if improvement_search:
         query = improvement_search.casefold()
         searchable = filtered_improvements["Melhoria"].astype(str) + " " + filtered_improvements["Descrição"].astype(str)
@@ -296,14 +313,45 @@ def render_improvements(frame: pd.DataFrame) -> None:
     total = len(frame)
     high = int(frame["Prioridade"].astype(str).str.casefold().isin(["alta", "altíssima", "altissima", "crítica", "critica"]).sum())
     pending = int(frame["Prioridade"].astype(str).str.strip().ne("").sum())
+    completed = int(frame["Status"].eq("Concluída").sum())
+    developing = int(frame["Status"].eq("Em desenvolvimento").sum())
+    planned = int(frame["Status"].eq("Planejada").sum())
+    unreported = int(frame["Status"].eq("Não informado").sum())
     kpi = st.columns(4)
     kpi[0].metric("Total de melhorias", format_number(total))
     kpi[1].metric("Alta criticidade", format_number(high), delta=f"{rounded_percent(high, total)} do total" if total else None)
-    kpi[2].metric("Demandas registradas", format_number(pending))
+    kpi[2].metric("Concluídas", format_number(completed), delta=rounded_percent(completed, total))
     kpi[3].metric("Categorias ativas", frame["Categoria"].replace("", pd.NA).nunique())
     if frame.empty:
         st.info("Nenhuma melhoria corresponde aos filtros selecionados.")
         return
+    status_counts = pd.DataFrame(
+        {"Status": ["Concluída", "Em desenvolvimento", "Planejada", "Não informado"], "Quantidade": [completed, developing, planned, unreported]}
+    )
+    st.markdown('<div class="section-label">Acompanhamento por status</div>', unsafe_allow_html=True)
+    status_chart = px.bar(
+        status_counts,
+        x="Status",
+        y="Quantidade",
+        text="Quantidade",
+        title="Distribuição das melhorias",
+        color="Status",
+        color_discrete_map={"Concluída": "#10b981", "Em desenvolvimento": "#3b82f6", "Planejada": "#f59e0b", "Não informado": "#64748b"},
+    )
+    status_chart.update_traces(texttemplate="%{y:.0f}", textposition="outside", textfont_size=11, cliponaxis=False)
+    st.plotly_chart(chart_figure(status_chart), use_container_width=True)
+    status_groups = st.columns(4)
+    for column, label, value in zip(status_groups, ["Concluídas", "Em desenvolvimento", "Planejadas", "Não informadas"], [completed, developing, planned, unreported]):
+        column.metric(label, format_number(value), delta=rounded_percent(value, total))
+    st.markdown('<div class="section-label">Listagem por status</div>', unsafe_allow_html=True)
+    list_columns = ["Categoria", "Melhoria", "Prioridade", "Sprint", "Status"]
+    for status in ["Concluída", "Em desenvolvimento", "Planejada", "Não informado"]:
+        status_frame = frame.loc[frame["Status"] == status, list_columns].copy()
+        with st.expander(f"{status} ({format_number(len(status_frame))})", expanded=status == "Em desenvolvimento"):
+            if status_frame.empty:
+                st.caption("Nenhuma melhoria nesta categoria.")
+            else:
+                st.dataframe(status_frame, hide_index=True, use_container_width=True, height=min(280, 80 + len(status_frame) * 35))
     st.markdown('<div class="section-label">Planejamento por sprint</div>', unsafe_allow_html=True)
     schedule = frame[
         frame["Início"].notna()
