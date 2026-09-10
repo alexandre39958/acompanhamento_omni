@@ -46,6 +46,7 @@ INCIDENTS_SOURCE = setting(
     "OMNI_INCIDENTES_CSV_URL",
     "https://docs.google.com/spreadsheets/d/1m_NJ_mPxvGNvZpPXqYysnSmb9EI-Kd_2Phz1LJ0ScqQ/export?format=csv&gid=1170584752",
 )
+UPDATES_SOURCE = setting("OMNI_ATUALIZACOES_CSV_URL", "")
 CACHE_TTL = int(os.getenv("OMNI_CACHE_TTL_SECONDS", "300"))
 
 IMPROVEMENT_COLUMNS = ["Categoria", "Melhoria", "Descrição", "Prioridade", "Sprint", "Início", "Fim", "Status"]
@@ -62,6 +63,7 @@ INCIDENT_COLUMNS = [
     "Atualizado em",
     "Sistema",
 ]
+UPDATE_COLUMNS = ["Número do card", "Tema", "Número do chamado", "Serviços afetados", "Repositório", "Status"]
 
 
 def inject_styles() -> None:
@@ -194,6 +196,8 @@ def downloadable_url(source: str) -> str:
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def load_source(source: str, source_name: str) -> tuple[pd.DataFrame, str | None]:
     try:
+        if not source:
+            return pd.DataFrame(), None
         if source.startswith(("http://", "https://")):
             request = Request(downloadable_url(source), headers={"User-Agent": "OMNI-dashboard/1.0"})
             with urlopen(request, timeout=30) as response:
@@ -218,9 +222,10 @@ def load_source(source: str, source_name: str) -> tuple[pd.DataFrame, str | None
         return pd.DataFrame(), f"Não foi possível carregar {source_name}: {exc}"
 
 
-def prepare_data() -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
+def prepare_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, list[str]]:
     improvements, improvement_error = load_source(IMPROVEMENTS_SOURCE, "melhorias")
     incidents, incident_error = load_source(INCIDENTS_SOURCE, "incidentes")
+    updates, updates_error = load_source(UPDATES_SOURCE, "últimas atualizações")
     improvements = normalize_columns(
         improvements,
         {
@@ -239,6 +244,17 @@ def prepare_data() -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
             "Atualizado em": ["updated", "updated at", "data atualizacao"], "Sistema": ["system", "sistema"],
         },
     )
+    updates = normalize_columns(
+        updates,
+        {
+            "Número do card": ["card", "devops", "numero card", "número"],
+            "Tema": ["assunto", "titulo", "título"],
+            "Número do chamado": ["chamado", "incident", "incidente", "numero incidente"],
+            "Serviços afetados": ["servicos", "serviços", "servico", "serviço", "servicos afetados"],
+            "Repositório": ["repositorio", "repo", "repository"],
+            "Status": ["estado"],
+        },
+    )
     incidents["Aberto(a)"] = pd.to_datetime(incidents["Aberto(a)"], errors="coerce", dayfirst=True)
     incidents["Atualizado em"] = pd.to_datetime(incidents["Atualizado em"], errors="coerce", dayfirst=True)
     incidents["Atualizado em"] = incidents["Atualizado em"].fillna(incidents["Aberto(a)"])
@@ -247,7 +263,7 @@ def prepare_data() -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
     if improvements["Sprint"].astype(str).str.strip().eq("").all() and not improvements.empty:
         improvements["Sprint"] = "Backlog"
     improvements["Status"] = improvements["Status"].map(normalize_improvement_status)
-    return improvements.fillna(""), incidents.fillna(""), [error for error in [improvement_error, incident_error] if error]
+    return improvements.fillna(""), incidents.fillna(""), updates.fillna(""), [error for error in [improvement_error, incident_error, updates_error] if error]
 
 
 def options(frame: pd.DataFrame, column: str) -> list[str]:
@@ -267,7 +283,7 @@ def csv_download(frame: pd.DataFrame, filename: str, label: str) -> None:
     st.download_button(label, data=payload, file_name=filename, mime="text/csv", use_container_width=False)
 
 
-def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, section: str) -> tuple[pd.DataFrame, pd.DataFrame, str, tuple[date, date]]:
+def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates: pd.DataFrame, section: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str, tuple[date, date]]:
     with st.sidebar:
         st.markdown("## OMNI\n**Governança operacional**")
         st.caption(f"Filtros de {section.lower()}")
@@ -281,6 +297,8 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, section:
         incident_states: list[str] = []
         incident_assignees: list[str] = []
         incident_groups: list[str] = []
+        update_statuses: list[str] = []
+        update_search = ""
         date_range: tuple[date, date] = (date.today(), date.today())
         if section == "Melhorias":
             improvement_categories = select_filter("Categoria", options(improvements, "Categoria"), "improvement_category")
@@ -288,7 +306,7 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, section:
             improvement_sprints = select_filter("Sprint", options(improvements, "Sprint"), "improvement_sprint")
             improvement_statuses = select_filter("Status", options(improvements, "Status"), "improvement_status")
             improvement_search = st.text_input("Busca textual", placeholder="Melhoria ou descrição", key="improvement_search")
-        else:
+        elif section == "Incidentes":
             incident_categories = select_filter("Categoria", options(incidents, "Categoria"), "incident_category")
             incident_priorities = select_filter("Prioridade", options(incidents, "Prioridade"), "incident_priority")
             incident_states = select_filter("Estado do chamado", options(incidents, "Estado"), "incident_state")
@@ -298,6 +316,9 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, section:
             min_date = valid_dates.min().date() if not valid_dates.empty else date.today() - timedelta(days=30)
             max_date = valid_dates.max().date() if not valid_dates.empty else date.today()
             date_range = st.date_input("Intervalo de atualização", value=(min_date, max_date), min_value=min_date, max_value=max_date, key="incident_date")
+        else:
+            update_statuses = select_filter("Status", options(updates, "Status"), "update_status")
+            update_search = st.text_input("Busca textual", placeholder="Tema, card, chamado ou repositório", key="update_search")
         st.divider()
         st.caption(f"Atualização automática: a cada {CACHE_TTL // 60 or 1} min")
 
@@ -315,7 +336,13 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, section:
         filtered_incidents = apply_values(filtered_incidents, column, selected)
     if len(date_range) == 2:
         filtered_incidents = filtered_incidents[filtered_incidents["Atualizado em"].dt.date.between(date_range[0], date_range[1])]
-    return filtered_improvements, filtered_incidents, improvement_search, date_range
+    filtered_updates = updates.copy()
+    filtered_updates = apply_values(filtered_updates, "Status", update_statuses)
+    if update_search:
+        query = update_search.casefold()
+        searchable = filtered_updates.astype(str).agg(" ".join, axis=1)
+        filtered_updates = filtered_updates[searchable.str.casefold().str.contains(query, na=False)]
+    return filtered_improvements, filtered_incidents, filtered_updates, improvement_search, date_range
 
 
 def render_improvements(frame: pd.DataFrame) -> None:
@@ -323,7 +350,6 @@ def render_improvements(frame: pd.DataFrame) -> None:
     st.caption(f"{len(frame):,} melhorias no recorte atual".replace(",", "."))
     total = len(frame)
     high = int(frame["Prioridade"].astype(str).str.casefold().isin(["alta", "altíssima", "altissima", "crítica", "critica"]).sum())
-    pending = int(frame["Prioridade"].astype(str).str.strip().ne("").sum())
     completed = int(frame["Status"].eq("Concluída").sum())
     developing = int(frame["Status"].eq("Em desenvolvimento").sum())
     homologation = int(frame["Status"].eq("Homologação").sum())
@@ -332,8 +358,8 @@ def render_improvements(frame: pd.DataFrame) -> None:
     kpi = st.columns(4)
     kpi[0].metric("Total de melhorias", format_number(total))
     kpi[1].metric("Alta criticidade", format_number(high), delta=f"{rounded_percent(high, total)} do total" if total else None)
-    kpi[2].metric("Concluídas", format_number(completed), delta=rounded_percent(completed, total))
-    kpi[3].metric("Em desenvolvimento", format_number(developing), delta=rounded_percent(developing, total))
+    kpi[2].metric("Backlog", format_number(backlog), delta=rounded_percent(backlog, total))
+    kpi[3].metric("Categorias ativas", frame["Categoria"].replace("", pd.NA).nunique())
     if frame.empty:
         st.info("Nenhuma melhoria corresponde aos filtros selecionados.")
         return
@@ -403,6 +429,29 @@ def render_improvements(frame: pd.DataFrame) -> None:
     st.dataframe(table, hide_index=True, use_container_width=True, height=360)
 
 
+def render_updates(frame: pd.DataFrame) -> None:
+    st.markdown('<div class="section-label">DevOps e mudanças recentes</div>', unsafe_allow_html=True)
+    if frame.empty:
+        st.info("Nenhuma atualização configurada. Adicione uma aba ou planilha com a URL em OMNI_ATUALIZACOES_CSV_URL.")
+        st.markdown("**Colunas esperadas:** `Número do card`, `Tema`, `Número do chamado`, `Serviços afetados`, `Repositório` e `Status`.")
+        return
+    total = len(frame)
+    completed = int(frame["Status"].map(canonical).str.contains("conclu|encerr|resolvid", regex=True).sum())
+    developing = int(frame["Status"].map(canonical).str.contains("desenvolv|andamento|homolog", regex=True).sum())
+    st.caption(f"{format_number(total)} atualizações no recorte atual")
+    cards = st.columns(3)
+    cards[0].metric("Atualizações", format_number(total))
+    cards[1].metric("Concluídas", format_number(completed), delta=rounded_percent(completed, total))
+    cards[2].metric("Em andamento", format_number(developing), delta=rounded_percent(developing, total))
+    status_data = frame["Status"].replace("", "Não informado").value_counts().rename_axis("Status").reset_index(name="Quantidade")
+    chart = px.bar(status_data, x="Status", y="Quantidade", color="Status", text="Quantidade", title="Atualizações por status", color_discrete_sequence=["#10b981", "#3b82f6", "#8b5cf6", "#f59e0b", "#64748b"])
+    chart.update_traces(texttemplate="%{y:.0f}", textposition="outside", textfont_size=10, cliponaxis=False)
+    st.plotly_chart(chart_figure(chart), use_container_width=True)
+    table = frame[UPDATE_COLUMNS].copy()
+    csv_download(table, "omni_atualizacoes.csv", "⇩ Exportar atualizações")
+    st.dataframe(table, hide_index=True, use_container_width=True, height=420)
+
+
 def render_incidents(frame: pd.DataFrame) -> None:
     st.markdown('<div class="section-label">Central de incidentes ITSM</div>', unsafe_allow_html=True)
     st.caption(f"{len(frame):,} chamados no recorte atual".replace(",", "."))
@@ -466,16 +515,18 @@ def render_incidents(frame: pd.DataFrame) -> None:
 
 def main() -> None:
     inject_styles()
-    improvements, incidents, errors = prepare_data()
+    improvements, incidents, updates, errors = prepare_data()
     st.markdown('<div class="hero"><div class="eyebrow">OMNI / Acompanhamento</div><h1>Painel de Gestão - OMNI</h1><p>Visão executiva do portfólio de melhorias e da operação de incidentes, com dados atualizados a partir das fontes corporativas.</p></div>', unsafe_allow_html=True)
     for error in errors:
         st.warning(error)
-    section = st.radio("Seção", ["Melhorias", "Incidentes"], horizontal=True, label_visibility="collapsed", key="active_section")
-    filtered_improvements, filtered_incidents, _, _ = render_sidebar(improvements, incidents, section)
+    section = st.radio("Seção", ["Melhorias", "Incidentes", "Últimas atualizações"], horizontal=True, label_visibility="collapsed", key="active_section")
+    filtered_improvements, filtered_incidents, filtered_updates, _, _ = render_sidebar(improvements, incidents, updates, section)
     if section == "Melhorias":
         render_improvements(filtered_improvements)
-    else:
+    elif section == "Incidentes":
         render_incidents(filtered_incidents)
+    else:
+        render_updates(filtered_updates)
 
 
 if __name__ == "__main__":
