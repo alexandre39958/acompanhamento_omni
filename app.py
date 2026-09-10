@@ -7,6 +7,8 @@ import unicodedata
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Iterable
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.request import Request, urlopen
 
 import pandas as pd
 import plotly.express as px
@@ -36,8 +38,14 @@ def setting(name: str, default: str) -> str:
     return str(value) if value else default
 
 
-IMPROVEMENTS_SOURCE = setting("OMNI_MELHORIAS_CSV_URL", str(DOWNLOADS_DIR / "Melhorias-OmniSesi-set2026.xlsx"))
-INCIDENTS_SOURCE = setting("OMNI_INCIDENTES_CSV_URL", str(DOWNLOADS_DIR / "incident (1).xlsx"))
+IMPROVEMENTS_SOURCE = setting(
+    "OMNI_MELHORIAS_CSV_URL",
+    "https://docs.google.com/spreadsheets/d/1mOL5gvWcekfgbKvqxTKYUEv3kiPrFGW2JfUWva6x5V8/export?format=csv&gid=394660906",
+)
+INCIDENTS_SOURCE = setting(
+    "OMNI_INCIDENTES_CSV_URL",
+    "https://docs.google.com/spreadsheets/d/1m_NJ_mPxvGNvZpPXqYysnSmb9EI-Kd_2Phz1LJ0ScqQ/export?format=csv&gid=1170584752",
+)
 CACHE_TTL = int(os.getenv("OMNI_CACHE_TTL_SECONDS", "300"))
 
 IMPROVEMENT_COLUMNS = ["Categoria", "Melhoria", "Descrição", "Prioridade", "Sprint", "Início", "Fim", "Status"]
@@ -131,11 +139,30 @@ def normalize_columns(frame: pd.DataFrame, schema: dict[str, list[str]]) -> pd.D
     return result
 
 
+def downloadable_url(source: str) -> str:
+    if "sharepoint.com/" not in source.lower():
+        return source
+    parsed = urlparse(source)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query["download"] = "1"
+    return urlunparse(parsed._replace(query=urlencode(query)))
+
+
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def load_source(source: str, source_name: str) -> tuple[pd.DataFrame, str | None]:
     try:
         if source.startswith(("http://", "https://")):
-            frame = pd.read_csv(source, encoding="utf-8-sig")
+            request = Request(downloadable_url(source), headers={"User-Agent": "OMNI-dashboard/1.0"})
+            with urlopen(request, timeout=30) as response:
+                payload = response.read()
+                content_type = response.headers.get_content_type().lower()
+            is_excel = (
+                source.lower().split("?", 1)[0].endswith((".xlsx", ".xls"))
+                or "spreadsheet" in content_type
+                or "excel" in content_type
+                or payload[:2] == b"PK"
+            )
+            frame = pd.read_excel(io.BytesIO(payload)) if is_excel else pd.read_csv(io.BytesIO(payload), encoding="utf-8-sig")
         else:
             source_path = Path(source)
             if not source_path.exists():
