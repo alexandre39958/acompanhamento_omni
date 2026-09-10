@@ -390,15 +390,6 @@ def render_improvements(frame: pd.DataFrame) -> None:
     )
     status_chart.update_traces(texttemplate="%{y:.0f}", textposition="outside", textfont_size=11, cliponaxis=False)
     st.plotly_chart(chart_figure(status_chart), use_container_width=True)
-    st.markdown('<div class="section-label">Listagem por status</div>', unsafe_allow_html=True)
-    list_columns = ["Categoria", "Melhoria", "Prioridade", "Sprint", "Status"]
-    for status in status_order:
-        status_frame = frame.loc[frame["Status"] == status, list_columns].copy()
-        with st.expander(f"{status} ({format_number(len(status_frame))})", expanded=False):
-            if status_frame.empty:
-                st.caption("Nenhuma melhoria nesta categoria.")
-            else:
-                st.dataframe(status_frame, hide_index=True, use_container_width=True, height=min(280, 80 + len(status_frame) * 35))
     st.markdown('<div class="section-label">Planejamento por sprint</div>', unsafe_allow_html=True)
     schedule = frame[
         frame["Início"].notna()
@@ -424,6 +415,15 @@ def render_improvements(frame: pd.DataFrame) -> None:
         st.plotly_chart(chart_figure(gantt), use_container_width=True)
     else:
         st.info("Adicione Início e Fim à fonte de melhorias para visualizar o roadmap por sprint.")
+    st.markdown('<div class="section-label">Listagem por status</div>', unsafe_allow_html=True)
+    list_columns = ["Categoria", "Melhoria", "Prioridade", "Sprint", "Status"]
+    for status in status_order:
+        status_frame = frame.loc[frame["Status"] == status, list_columns].copy()
+        with st.expander(f"{status} ({format_number(len(status_frame))})", expanded=False):
+            if status_frame.empty:
+                st.caption("Nenhuma melhoria nesta categoria.")
+            else:
+                st.dataframe(status_frame, hide_index=True, use_container_width=True, height=min(280, 80 + len(status_frame) * 35))
     left, right = st.columns(2)
     with left:
         category_data = frame["Categoria"].replace("", "Não informado").value_counts().rename_axis("Categoria").reset_index(name="Quantidade")
