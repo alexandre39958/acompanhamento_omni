@@ -132,6 +132,21 @@ def format_date(value: object) -> str:
     return pd.Timestamp(value).strftime("%d/%m/%Y")
 
 
+def short_improvement_title(value: object) -> str:
+    title = re.sub(r"\s*\([^)]*\)", "", str(value)).strip()
+    replacements = {
+        "Agendamento em locais que não são Unidades do Sesi": "Agendamentos em locais não unidade SESI",
+        "Impedir o agendamento de mudança de risco para datas posteriores à data de movimentação": "Bloqueio de mudança de risco após movimentação",
+        "Unidades devem receber e-mails de novo agendamento": "E-mails para novos agendamentos",
+        "Opção de atender a consulta ocupacional por último": "Consulta ocupacional por último na fila",
+        "Otimizar fila de atendimento inteligente": "Otimização da fila inteligente",
+    }
+    if title in replacements:
+        return replacements[title]
+    words = title.split()
+    return title if len(words) <= 8 else f"{' '.join(words[:8])}..."
+
+
 def canonical(value: object) -> str:
     text = unicodedata.normalize("NFKD", str(value)).encode("ascii", "ignore").decode("ascii")
     return re.sub(r"[^a-z0-9]+", "", text.lower())
@@ -354,12 +369,15 @@ def render_improvements(frame: pd.DataFrame) -> None:
     homologation = int(frame["Status"].eq("Homologação").sum())
     backlog = int(frame["Status"].eq("Backlog").sum())
     unreported = int(frame["Status"].eq("Não informado").sum())
-    st.metric("Total de melhorias", format_number(total))
     if frame.empty:
         st.info("Nenhuma melhoria corresponde aos filtros selecionados.")
         return
     status_order = ["Concluída", "Em desenvolvimento", "Homologação", "Backlog", "Não informado"]
     status_counts = pd.DataFrame({"Status": status_order, "Quantidade": [completed, developing, homologation, backlog, unreported]})
+    overview = st.columns(5)
+    overview[0].metric("Total de melhorias", format_number(total))
+    for column, label, value in zip(overview[1:], ["Concluídas", "Em desenvolvimento", "Homologação", "Backlog"], [completed, developing, homologation, backlog]):
+        column.metric(label, format_number(value), delta=rounded_percent(value, total))
     st.markdown('<div class="section-label">Acompanhamento por status</div>', unsafe_allow_html=True)
     status_chart = px.bar(
         status_counts,
@@ -372,14 +390,11 @@ def render_improvements(frame: pd.DataFrame) -> None:
     )
     status_chart.update_traces(texttemplate="%{y:.0f}", textposition="outside", textfont_size=11, cliponaxis=False)
     st.plotly_chart(chart_figure(status_chart), use_container_width=True)
-    status_groups = st.columns(5)
-    for column, label, value in zip(status_groups, ["Concluídas", "Em desenvolvimento", "Homologação", "Backlog", "Não informadas"], [completed, developing, homologation, backlog, unreported]):
-        column.metric(label, format_number(value), delta=rounded_percent(value, total))
     st.markdown('<div class="section-label">Listagem por status</div>', unsafe_allow_html=True)
     list_columns = ["Categoria", "Melhoria", "Prioridade", "Sprint", "Status"]
     for status in status_order:
         status_frame = frame.loc[frame["Status"] == status, list_columns].copy()
-        with st.expander(f"{status} ({format_number(len(status_frame))})", expanded=status == "Em desenvolvimento"):
+        with st.expander(f"{status} ({format_number(len(status_frame))})", expanded=False):
             if status_frame.empty:
                 st.caption("Nenhuma melhoria nesta categoria.")
             else:
@@ -392,7 +407,7 @@ def render_improvements(frame: pd.DataFrame) -> None:
         & frame["Fim"].astype(str).str.strip().ne("")
     ].copy()
     if not schedule.empty:
-        schedule["Trabalho"] = schedule["Melhoria"].astype(str)
+        schedule["Trabalho"] = schedule["Melhoria"].map(short_improvement_title)
         schedule["Sprint"] = schedule["Sprint"].replace("", "Backlog")
         gantt = px.timeline(
             schedule,
@@ -400,7 +415,7 @@ def render_improvements(frame: pd.DataFrame) -> None:
             x_end="Fim",
             y="Trabalho",
             color="Sprint",
-            hover_data=["Categoria", "Prioridade", "Status"],
+            hover_data=["Melhoria", "Categoria", "Prioridade", "Status"],
             title="Roadmap de melhorias",
             color_discrete_sequence=["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444"],
         )
