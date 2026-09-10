@@ -145,9 +145,20 @@ def normalize_improvement_status(value: object) -> str:
         return "Concluída"
     if any(term in key for term in ["desenvolv", "andamento", "execucao", "fazendo", "progresso"]):
         return "Em desenvolvimento"
-    if any(term in key for term in ["planej", "backlog", "pendente", "aguardando", "naoinici"]):
-        return "Planejada"
+    if "homolog" in key:
+        return "Homologação"
+    if "backlog" in key:
+        return "Backlog"
     return str(value).strip()
+
+
+def parse_improvement_date(value: object) -> pd.Timestamp:
+    if pd.isna(value) or not str(value).strip():
+        return pd.NaT
+    text = str(value).strip()
+    if re.fullmatch(r"\d{1,2}/\d{1,2}", text):
+        text = f"{text}/{pd.Timestamp.now().year}"
+    return pd.to_datetime(text, errors="coerce", dayfirst=True)
 
 
 def resolve_column(columns: Iterable[object], aliases: Iterable[str]) -> str | None:
@@ -231,8 +242,8 @@ def prepare_data() -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
     incidents["Aberto(a)"] = pd.to_datetime(incidents["Aberto(a)"], errors="coerce", dayfirst=True)
     incidents["Atualizado em"] = pd.to_datetime(incidents["Atualizado em"], errors="coerce", dayfirst=True)
     incidents["Atualizado em"] = incidents["Atualizado em"].fillna(incidents["Aberto(a)"])
-    improvements["Início"] = pd.to_datetime(improvements["Início"], errors="coerce", dayfirst=True)
-    improvements["Fim"] = pd.to_datetime(improvements["Fim"], errors="coerce", dayfirst=True)
+    improvements["Início"] = improvements["Início"].map(parse_improvement_date)
+    improvements["Fim"] = improvements["Fim"].map(parse_improvement_date)
     if improvements["Sprint"].astype(str).str.strip().eq("").all() and not improvements.empty:
         improvements["Sprint"] = "Backlog"
     improvements["Status"] = improvements["Status"].map(normalize_improvement_status)
@@ -315,19 +326,19 @@ def render_improvements(frame: pd.DataFrame) -> None:
     pending = int(frame["Prioridade"].astype(str).str.strip().ne("").sum())
     completed = int(frame["Status"].eq("Concluída").sum())
     developing = int(frame["Status"].eq("Em desenvolvimento").sum())
-    planned = int(frame["Status"].eq("Planejada").sum())
+    homologation = int(frame["Status"].eq("Homologação").sum())
+    backlog = int(frame["Status"].eq("Backlog").sum())
     unreported = int(frame["Status"].eq("Não informado").sum())
     kpi = st.columns(4)
     kpi[0].metric("Total de melhorias", format_number(total))
     kpi[1].metric("Alta criticidade", format_number(high), delta=f"{rounded_percent(high, total)} do total" if total else None)
     kpi[2].metric("Concluídas", format_number(completed), delta=rounded_percent(completed, total))
-    kpi[3].metric("Categorias ativas", frame["Categoria"].replace("", pd.NA).nunique())
+    kpi[3].metric("Em desenvolvimento", format_number(developing), delta=rounded_percent(developing, total))
     if frame.empty:
         st.info("Nenhuma melhoria corresponde aos filtros selecionados.")
         return
-    status_counts = pd.DataFrame(
-        {"Status": ["Concluída", "Em desenvolvimento", "Planejada", "Não informado"], "Quantidade": [completed, developing, planned, unreported]}
-    )
+    status_order = ["Concluída", "Em desenvolvimento", "Homologação", "Backlog", "Não informado"]
+    status_counts = pd.DataFrame({"Status": status_order, "Quantidade": [completed, developing, homologation, backlog, unreported]})
     st.markdown('<div class="section-label">Acompanhamento por status</div>', unsafe_allow_html=True)
     status_chart = px.bar(
         status_counts,
@@ -336,16 +347,16 @@ def render_improvements(frame: pd.DataFrame) -> None:
         text="Quantidade",
         title="Distribuição das melhorias",
         color="Status",
-        color_discrete_map={"Concluída": "#10b981", "Em desenvolvimento": "#3b82f6", "Planejada": "#f59e0b", "Não informado": "#64748b"},
+        color_discrete_map={"Concluída": "#10b981", "Em desenvolvimento": "#3b82f6", "Homologação": "#8b5cf6", "Backlog": "#f59e0b", "Não informado": "#64748b"},
     )
     status_chart.update_traces(texttemplate="%{y:.0f}", textposition="outside", textfont_size=11, cliponaxis=False)
     st.plotly_chart(chart_figure(status_chart), use_container_width=True)
-    status_groups = st.columns(4)
-    for column, label, value in zip(status_groups, ["Concluídas", "Em desenvolvimento", "Planejadas", "Não informadas"], [completed, developing, planned, unreported]):
+    status_groups = st.columns(5)
+    for column, label, value in zip(status_groups, ["Concluídas", "Em desenvolvimento", "Homologação", "Backlog", "Não informadas"], [completed, developing, homologation, backlog, unreported]):
         column.metric(label, format_number(value), delta=rounded_percent(value, total))
     st.markdown('<div class="section-label">Listagem por status</div>', unsafe_allow_html=True)
     list_columns = ["Categoria", "Melhoria", "Prioridade", "Sprint", "Status"]
-    for status in ["Concluída", "Em desenvolvimento", "Planejada", "Não informado"]:
+    for status in status_order:
         status_frame = frame.loc[frame["Status"] == status, list_columns].copy()
         with st.expander(f"{status} ({format_number(len(status_frame))})", expanded=status == "Em desenvolvimento"):
             if status_frame.empty:
