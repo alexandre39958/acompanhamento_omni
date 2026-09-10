@@ -93,6 +93,9 @@ def inject_styles() -> None:
         div[data-testid="stDataFrame"] { border: 1px solid var(--line); border-radius: 1rem; overflow: hidden; }
         button[data-baseweb="tab"] { font-weight: 600; color: #94a3b8; }
         button[data-baseweb="tab"][aria-selected="true"] { color: #60a5fa; }
+        div[role="radiogroup"] { gap: .45rem; }
+        div[role="radiogroup"] label { background: rgba(255,255,255,.045); border: 1px solid var(--line); border-radius: .7rem; padding: .35rem .8rem; }
+        div[role="radiogroup"] label:has(input:checked) { background: rgba(59,130,246,.18); border-color: rgba(59,130,246,.65); }
         div[data-testid="stAlert"] { background: rgba(245,158,11,.1); border-color: rgba(245,158,11,.35); }
         div[data-testid="stPlotlyChart"] { background: rgba(255,255,255,.035); border: 1px solid var(--line); border-radius: 1rem; padding: .25rem; }
         </style>
@@ -111,6 +114,18 @@ def chart_figure(figure):
         margin=dict(l=24, r=24, t=56, b=24),
     )
     return figure
+
+
+def format_number(value: int | float) -> str:
+    return f"{value:,.0f}".replace(",", ".")
+
+
+def rounded_percent(value: int, total: int) -> str:
+    return f"{round((value / total) * 100):.0f}%" if total else "0%"
+
+
+def format_date(value: object) -> str:
+    return pd.Timestamp(value).strftime("%d/%m/%Y")
 
 
 def canonical(value: object) -> str:
@@ -225,16 +240,26 @@ def csv_download(frame: pd.DataFrame, filename: str, label: str) -> None:
     st.download_button(label, data=payload, file_name=filename, mime="text/csv", use_container_width=False)
 
 
-def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, str, tuple[date, date]]:
+def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, section: str) -> tuple[pd.DataFrame, pd.DataFrame, str, tuple[date, date]]:
     with st.sidebar:
         st.markdown("## OMNI\n**Governança operacional**")
-        st.caption("Filtros independentes por domínio")
-        with st.expander("Melhorias", expanded=True):
+        st.caption(f"Filtros de {section.lower()}")
+        improvement_categories: list[str] = []
+        improvement_priorities: list[str] = []
+        improvement_sprints: list[str] = []
+        improvement_search = ""
+        incident_categories: list[str] = []
+        incident_priorities: list[str] = []
+        incident_states: list[str] = []
+        incident_assignees: list[str] = []
+        incident_groups: list[str] = []
+        date_range: tuple[date, date] = (date.today(), date.today())
+        if section == "Melhorias":
             improvement_categories = select_filter("Categoria", options(improvements, "Categoria"), "improvement_category")
             improvement_priorities = select_filter("Prioridade", options(improvements, "Prioridade"), "improvement_priority")
             improvement_sprints = select_filter("Sprint", options(improvements, "Sprint"), "improvement_sprint")
             improvement_search = st.text_input("Busca textual", placeholder="Melhoria ou descrição", key="improvement_search")
-        with st.expander("Incidentes", expanded=True):
+        else:
             incident_categories = select_filter("Categoria", options(incidents, "Categoria"), "incident_category")
             incident_priorities = select_filter("Prioridade", options(incidents, "Prioridade"), "incident_priority")
             incident_states = select_filter("Estado do chamado", options(incidents, "Estado"), "incident_state")
@@ -267,12 +292,12 @@ def render_improvements(frame: pd.DataFrame) -> None:
     st.markdown('<div class="section-label">Portfólio de evolução</div>', unsafe_allow_html=True)
     st.caption(f"{len(frame):,} melhorias no recorte atual".replace(",", "."))
     total = len(frame)
-    high = int(frame["Prioridade"].astype(str).str.casefold().isin(["alta", "crítica", "critica"]).sum())
+    high = int(frame["Prioridade"].astype(str).str.casefold().isin(["alta", "altíssima", "altissima", "crítica", "critica"]).sum())
     pending = int(frame["Prioridade"].astype(str).str.strip().ne("").sum())
     kpi = st.columns(4)
-    kpi[0].metric("Total de melhorias", f"{total:,}".replace(",", "."))
-    kpi[1].metric("Alta criticidade", f"{high:,}".replace(",", "."), delta=f"{(high / total * 100):.0f}% do total" if total else None)
-    kpi[2].metric("Demandas registradas", f"{pending:,}".replace(",", "."))
+    kpi[0].metric("Total de melhorias", format_number(total))
+    kpi[1].metric("Alta criticidade", format_number(high), delta=f"{rounded_percent(high, total)} do total" if total else None)
+    kpi[2].metric("Demandas registradas", format_number(pending))
     kpi[3].metric("Categorias ativas", frame["Categoria"].replace("", pd.NA).nunique())
     if frame.empty:
         st.info("Nenhuma melhoria corresponde aos filtros selecionados.")
@@ -320,24 +345,42 @@ def render_improvements(frame: pd.DataFrame) -> None:
 def render_incidents(frame: pd.DataFrame) -> None:
     st.markdown('<div class="section-label">Central de incidentes ITSM</div>', unsafe_allow_html=True)
     st.caption(f"{len(frame):,} chamados no recorte atual".replace(",", "."))
-    opened = int(frame["Estado"].astype(str).str.casefold().isin(["aberto", "open"]).sum())
-    progress = int(frame["Estado"].astype(str).str.casefold().isin(["em andamento", "in progress", "em tratamento"]).sum())
-    closed = int(frame["Estado"].astype(str).str.casefold().isin(["encerrado", "closed", "resolvido"]).sum())
-    critical = int(frame["Prioridade"].astype(str).str.casefold().isin(["crítica", "critica", "alta", "p1", "p2"]).sum())
-    kpi = st.columns(4)
-    kpi[0].metric("Chamados abertos", opened)
-    kpi[1].metric("Em andamento", progress)
-    kpi[2].metric("Encerrados", closed)
-    kpi[3].metric("Criticidades ativas", critical)
+    total = len(frame)
+    closed = int(frame["Estado"].astype(str).str.casefold().isin(["encerrado(a)", "encerrado", "closed", "resolvido(a)", "resolvido", "cancelado(a)", "cancelado"]).sum())
+    opened = total - closed
+    insights = st.columns(4)
+    if total and frame["Aberto(a)"].notna().any():
+        daily = frame.dropna(subset=["Aberto(a)"]).copy()
+        daily["Data"] = daily["Aberto(a)"].dt.date
+        counts = daily["Data"].value_counts()
+        peak_day, peak_count = counts.idxmax(), int(counts.max())
+        quiet_day, quiet_count = counts.idxmin(), int(counts.min())
+        weeks = max(daily["Data"].nunique() / 7, 1)
+        months = max(daily["Data"].nunique() / 30, 1)
+        insight_values = [
+            ("MAIOR PICO DIÁRIO", f"{peak_count} chamados em {peak_day.strftime('%d/%m/%Y')}", "#f59e0b"),
+            ("MENOR VOLUME ATIVO", f"{quiet_count} chamados em {quiet_day.strftime('%d/%m/%Y')}", "#10b981"),
+            ("MÉDIA SEMANAL", f"Aprox. {round(total / weeks):.0f} / semana", "#3b82f6"),
+            ("MÉDIA MENSAL", f"Aprox. {round(total / months):.0f} / mês", "#8b5cf6"),
+        ]
+        for column, (title, text, color) in zip(insights, insight_values):
+            column.markdown(f'<div style="border:1px solid {color}55;background:{color}12;border-radius:.8rem;padding:.75rem;height:100%"><div style="color:{color};font-size:.68rem;font-weight:700;letter-spacing:.08em">{title}</div><div style="color:#e2e8f0;font-size:.82rem;margin-top:.45rem">{text}</div></div>', unsafe_allow_html=True)
+    kpi = st.columns(3)
+    kpi[0].metric("Volume total", format_number(total))
+    kpi[1].metric("Resolvidos / Encerrados", format_number(closed), delta=rounded_percent(closed, total))
+    kpi[2].metric("Abertos / Pendentes", format_number(opened), delta=rounded_percent(opened, total))
     if frame.empty:
         st.info("Nenhum incidente corresponde aos filtros selecionados.")
         return
     chart_a, chart_b = st.columns(2)
     with chart_a:
-        timeline = frame.dropna(subset=["Atualizado em"]).copy()
-        timeline["Data"] = timeline["Atualizado em"].dt.date
+        timeline = frame.dropna(subset=["Aberto(a)"]).copy()
+        timeline["Data"] = timeline["Aberto(a)"].dt.date
         timeline = timeline.groupby(["Data", "Categoria"], as_index=False).size().rename(columns={"size": "Chamados"})
-        st.plotly_chart(chart_figure(px.area(timeline, x="Data", y="Chamados", color="Categoria", title="Evolução temporal por tipo", line_shape="spline", color_discrete_sequence=["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b"])), use_container_width=True)
+        title = "Volume de abertura (dia a dia)"
+        if not timeline.empty:
+            st.caption(f"{format_date(timeline['Data'].min())} até {format_date(timeline['Data'].max())}")
+        st.plotly_chart(chart_figure(px.bar(timeline, x="Data", y="Chamados", color="Categoria", title=title, text="Chamados", color_discrete_sequence=["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b"])), use_container_width=True)
     with chart_b:
         state_data = frame["Estado"].replace("", "Não informado").value_counts().rename_axis("Estado").reset_index(name="Chamados")
         st.plotly_chart(chart_figure(px.pie(state_data, names="Estado", values="Chamados", hole=.58, title="Distribuição do status atual", color_discrete_sequence=["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6"])), use_container_width=True)
@@ -360,11 +403,11 @@ def main() -> None:
     st.markdown('<div class="hero"><div class="eyebrow">OMNI / Acompanhamento</div><h1>Painel de Gestão - OMNI</h1><p>Visão executiva do portfólio de melhorias e da operação de incidentes, com dados atualizados a partir das fontes corporativas.</p></div>', unsafe_allow_html=True)
     for error in errors:
         st.warning(error)
-    filtered_improvements, filtered_incidents, _, _ = render_sidebar(improvements, incidents)
-    improvements_tab, incidents_tab = st.tabs(["Melhorias", "Incidentes"])
-    with improvements_tab:
+    section = st.radio("Seção", ["Melhorias", "Incidentes"], horizontal=True, label_visibility="collapsed", key="active_section")
+    filtered_improvements, filtered_incidents, _, _ = render_sidebar(improvements, incidents, section)
+    if section == "Melhorias":
         render_improvements(filtered_improvements)
-    with incidents_tab:
+    else:
         render_incidents(filtered_incidents)
 
 
