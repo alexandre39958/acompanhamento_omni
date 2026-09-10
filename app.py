@@ -96,6 +96,8 @@ def inject_styles() -> None:
         div[role="radiogroup"] { gap: .45rem; }
         div[role="radiogroup"] label { background: rgba(255,255,255,.045); border: 1px solid var(--line); border-radius: .7rem; padding: .35rem .8rem; }
         div[role="radiogroup"] label:has(input:checked) { background: rgba(59,130,246,.18); border-color: rgba(59,130,246,.65); }
+        .incident-spacer { height: 1.25rem; }
+        .incident-caption { color: #94a3b8; font-size: .78rem; margin: .1rem 0 .45rem; }
         div[data-testid="stAlert"] { background: rgba(245,158,11,.1); border-color: rgba(245,158,11,.35); }
         div[data-testid="stPlotlyChart"] { background: rgba(255,255,255,.035); border: 1px solid var(--line); border-radius: 1rem; padding: .25rem; }
         </style>
@@ -111,7 +113,7 @@ def chart_figure(figure):
         plot_bgcolor="rgba(0,0,0,0)",
         font_color="#cbd5e1",
         title_font_color="#f8fafc",
-        margin=dict(l=24, r=24, t=56, b=24),
+        margin=dict(l=28, r=28, t=56, b=28),
     )
     return figure
 
@@ -365,10 +367,12 @@ def render_incidents(frame: pd.DataFrame) -> None:
         ]
         for column, (title, text, color) in zip(insights, insight_values):
             column.markdown(f'<div style="border:1px solid {color}55;background:{color}12;border-radius:.8rem;padding:.75rem;height:100%"><div style="color:{color};font-size:.68rem;font-weight:700;letter-spacing:.08em">{title}</div><div style="color:#e2e8f0;font-size:.82rem;margin-top:.45rem">{text}</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="incident-spacer"></div>', unsafe_allow_html=True)
     kpi = st.columns(3)
     kpi[0].metric("Volume total", format_number(total))
     kpi[1].metric("Resolvidos / Encerrados", format_number(closed), delta=rounded_percent(closed, total))
     kpi[2].metric("Abertos / Pendentes", format_number(opened), delta=rounded_percent(opened, total))
+    st.markdown('<div class="incident-spacer"></div>', unsafe_allow_html=True)
     if frame.empty:
         st.info("Nenhum incidente corresponde aos filtros selecionados.")
         return
@@ -379,11 +383,15 @@ def render_incidents(frame: pd.DataFrame) -> None:
         timeline = timeline.groupby(["Data", "Categoria"], as_index=False).size().rename(columns={"size": "Chamados"})
         title = "Volume de abertura (dia a dia)"
         if not timeline.empty:
-            st.caption(f"{format_date(timeline['Data'].min())} até {format_date(timeline['Data'].max())}")
-        st.plotly_chart(chart_figure(px.bar(timeline, x="Data", y="Chamados", color="Categoria", title=title, text="Chamados", color_discrete_sequence=["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b"])), use_container_width=True)
+            st.markdown(f'<div class="incident-caption">{format_date(timeline["Data"].min())} até {format_date(timeline["Data"].max())}</div>', unsafe_allow_html=True)
+        bar_chart = px.bar(timeline, x="Data", y="Chamados", color="Categoria", title=title, text="Chamados", color_discrete_sequence=["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b"])
+        bar_chart.update_traces(texttemplate="%{y:.0f}", textposition="outside", textfont_size=10, cliponaxis=False)
+        st.plotly_chart(chart_figure(bar_chart), use_container_width=True)
     with chart_b:
         state_data = frame["Estado"].replace("", "Não informado").value_counts().rename_axis("Estado").reset_index(name="Chamados")
-        st.plotly_chart(chart_figure(px.pie(state_data, names="Estado", values="Chamados", hole=.58, title="Distribuição do status atual", color_discrete_sequence=["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6"])), use_container_width=True)
+        pie_chart = px.pie(state_data, names="Estado", values="Chamados", hole=.58, title="Distribuição do status atual", color_discrete_sequence=["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6"])
+        pie_chart.update_traces(textinfo="percent", texttemplate="%{percent:.0%}", textfont_size=11, hovertemplate="%{label}: %{value} chamados (%{percent:.0%})<extra></extra>")
+        st.plotly_chart(chart_figure(pie_chart), use_container_width=True)
     fallback_system = frame["Categoria"].replace("", "Não informado")
     system = frame["Sistema"].where(frame["Sistema"].astype(str).str.strip().ne(""), fallback_system)
     stack = pd.DataFrame({"Sistema": system, "Prioridade": frame["Prioridade"].replace("", "Não informado")}).value_counts().reset_index(name="Chamados")
