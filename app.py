@@ -46,7 +46,10 @@ INCIDENTS_SOURCE = setting(
     "OMNI_INCIDENTES_CSV_URL",
     "https://docs.google.com/spreadsheets/d/1m_NJ_mPxvGNvZpPXqYysnSmb9EI-Kd_2Phz1LJ0ScqQ/export?format=csv&gid=1170584752",
 )
-UPDATES_SOURCE = setting("OMNI_ATUALIZACOES_CSV_URL", "")
+UPDATES_SOURCE = setting(
+    "OMNI_ATUALIZACOES_CSV_URL",
+    "https://docs.google.com/spreadsheets/d/12wDYwtSrFC_rieT37lK1MJ-d66DOCpLuMUfMOJqu3c0/export?format=csv",
+)
 CACHE_TTL = int(os.getenv("OMNI_CACHE_TTL_SECONDS", "300"))
 
 IMPROVEMENT_COLUMNS = ["Categoria", "Melhoria", "Descrição", "Prioridade", "Sprint", "Início", "Fim", "Status"]
@@ -63,7 +66,7 @@ INCIDENT_COLUMNS = [
     "Atualizado em",
     "Sistema",
 ]
-UPDATE_COLUMNS = ["Número do card", "Tema", "Número do chamado", "Serviços afetados", "Repositório", "Status"]
+UPDATE_COLUMNS = ["PR", "Service Now", "Tema", "Serviços", "Observações", "Mês"]
 
 
 def inject_styles() -> None:
@@ -270,12 +273,12 @@ def prepare_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, list[str]]
     updates = normalize_columns(
         updates,
         {
-            "Número do card": ["card", "devops", "numero card", "número"],
+            "PR": ["numero do card", "card", "devops", "pull request", "número", "setembro"],
+            "Service Now": ["service now", "chamado", "incident", "incidente", "numero incidente"],
             "Tema": ["assunto", "titulo", "título"],
-            "Número do chamado": ["chamado", "incident", "incidente", "numero incidente"],
-            "Serviços afetados": ["servicos", "serviços", "servico", "serviço", "servicos afetados"],
-            "Repositório": ["repositorio", "repo", "repository"],
-            "Status": ["estado"],
+            "Serviços": ["servicos", "serviços", "servico", "serviço", "servicos afetados"],
+            "Observações": ["observacoes", "observações", "obs", "comentarios", "comentários"],
+            "Mês": ["mes", "mês", "month"],
         },
     )
     incidents["Aberto(a)"] = pd.to_datetime(incidents["Aberto(a)"], errors="coerce", dayfirst=True)
@@ -320,7 +323,7 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
         incident_states: list[str] = []
         incident_assignees: list[str] = []
         incident_groups: list[str] = []
-        update_statuses: list[str] = []
+        update_months: list[str] = []
         update_search = ""
         date_range: tuple[date, date] = (date.today(), date.today())
         if section == "Melhorias":
@@ -340,8 +343,8 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
             max_date = valid_dates.max().date() if not valid_dates.empty else date.today()
             date_range = st.date_input("Intervalo de atualização", value=(min_date, max_date), min_value=min_date, max_value=max_date, key="incident_date")
         else:
-            update_statuses = select_filter("Status", options(updates, "Status"), "update_status")
-            update_search = st.text_input("Busca textual", placeholder="Tema, card, chamado ou repositório", key="update_search")
+            update_months = select_filter("Mês", options(updates, "Mês"), "update_month")
+            update_search = st.text_input("Busca textual", placeholder="Tema, PR, chamado ou serviço", key="update_search")
         st.divider()
         st.caption(f"Atualização automática: a cada {CACHE_TTL // 60 or 1} min")
 
@@ -360,7 +363,7 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
     if len(date_range) == 2:
         filtered_incidents = filtered_incidents[filtered_incidents["Atualizado em"].dt.date.between(date_range[0], date_range[1])]
     filtered_updates = updates.copy()
-    filtered_updates = apply_values(filtered_updates, "Status", update_statuses)
+    filtered_updates = apply_values(filtered_updates, "Mês", update_months)
     if update_search:
         query = update_search.casefold()
         searchable = filtered_updates.astype(str).agg(" ".join, axis=1)
@@ -448,21 +451,23 @@ def render_improvements(frame: pd.DataFrame) -> None:
 
 
 def render_updates(frame: pd.DataFrame) -> None:
-    st.markdown('<div class="section-label">DevOps e mudanças recentes</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">PRs e mudanças recentes</div>', unsafe_allow_html=True)
     if frame.empty:
         st.info("Nenhuma atualização configurada. Adicione uma aba ou planilha com a URL em OMNI_ATUALIZACOES_CSV_URL.")
-        st.markdown("**Colunas esperadas:** `Número do card`, `Tema`, `Número do chamado`, `Serviços afetados`, `Repositório` e `Status`.")
+        st.markdown("**Colunas esperadas:** `PR`, `SERVICE NOW`, `TEMA`, `SERVIÇOS`, `OBSERVAÇÕES` e `Mês`.")
         return
     total = len(frame)
-    completed = int(frame["Status"].map(canonical).str.contains("conclu|encerr|resolvid", regex=True).sum())
-    developing = int(frame["Status"].map(canonical).str.contains("desenvolv|andamento|homolog", regex=True).sum())
-    st.caption(f"{format_number(total)} atualizações no recorte atual")
-    cards = st.columns(3)
-    cards[0].metric("Atualizações", format_number(total))
-    cards[1].metric("Concluídas", format_number(completed), delta=rounded_percent(completed, total))
-    cards[2].metric("Em andamento", format_number(developing), delta=rounded_percent(developing, total))
-    status_data = frame["Status"].replace("", "Não informado").value_counts().rename_axis("Status").reset_index(name="Quantidade")
-    chart = px.bar(status_data, x="Status", y="Quantidade", color="Status", text="Quantidade", title="Atualizações por status", color_discrete_sequence=["#10b981", "#3b82f6", "#8b5cf6", "#f59e0b", "#64748b"])
+    valid_prs = frame["PR"].astype(str).str.strip().replace("-", "")
+    valid_incidents = frame["Service Now"].astype(str).str.strip().replace("-", "")
+    services = frame["Serviços"].astype(str).str.split(",").explode().str.strip().replace("", pd.NA).dropna()
+    st.caption(f"{format_number(total)} registros no recorte atual")
+    cards = st.columns(4)
+    cards[0].metric("Registros", format_number(total))
+    cards[1].metric("PRs identificadas", format_number(valid_prs.ne("").sum()))
+    cards[2].metric("Chamados vinculados", format_number(valid_incidents.ne("").sum()))
+    cards[3].metric("Serviços envolvidos", format_number(services.nunique()))
+    service_data = services.value_counts().rename_axis("Serviço").reset_index(name="Registros")
+    chart = px.bar(service_data, x="Serviço", y="Registros", text="Registros", title="PRs por serviço", color_discrete_sequence=["#3b82f6"])
     chart.update_traces(texttemplate="%{y:.0f}", textposition="outside", textfont_size=10, cliponaxis=False)
     st.plotly_chart(chart_figure(chart), use_container_width=True)
     table = frame[UPDATE_COLUMNS].copy()
