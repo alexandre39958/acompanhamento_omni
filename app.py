@@ -508,31 +508,31 @@ def render_incidents(frame: pd.DataFrame) -> None:
         timeline["Data"] = timeline["Aberto(a)"].dt.normalize()
         first_day = timeline["Data"].min()
         last_day = timeline["Data"].max()
-        all_days = pd.date_range(first_day, last_day, freq="D")
-        daily_counts = timeline.groupby("Data").size().reindex(all_days, fill_value=0).rename("Chamados").reset_index()
-        daily_counts.columns = ["Data", "Chamados"]
-        daily_counts["Rótulo"] = daily_counts["Chamados"].where(daily_counts["Chamados"].gt(0), "")
-        tick_dates = list(all_days[::3])
-        if all_days[-1] not in tick_dates:
-            tick_dates.append(all_days[-1])
-        title = "Volume de Abertura (Dia a Dia)"
-        st.markdown(f'<div class="incident-caption">{format_date(first_day)} até {format_date(last_day)}</div>', unsafe_allow_html=True)
+        daily_counts = timeline.groupby("Data").size().rename("Chamados").reset_index()
+        daily_counts = daily_counts.sort_values("Data").reset_index(drop=True)
+        daily_counts["Rótulo"] = daily_counts["Chamados"].astype(int).astype(str)
+        tick_step = max(1, len(daily_counts) // 9)
+        tick_dates = daily_counts.loc[::tick_step, "Data"].tolist()
+        if daily_counts["Data"].iloc[-1] not in tick_dates:
+            tick_dates.append(daily_counts["Data"].iloc[-1])
+        title = "Aberturas por dia"
+        st.markdown(f'<div class="incident-caption">{format_date(first_day)} até {format_date(last_day)} · dias com chamados</div>', unsafe_allow_html=True)
         bar_chart = px.bar(daily_counts, x="Data", y="Chamados", title=title, text="Rótulo", color_discrete_sequence=["#3b82f6"])
         bar_chart.update_traces(
             texttemplate="%{text}",
             textposition="outside",
-            textfont_size=14,
+            textfont_size=12,
             cliponaxis=False,
             hovertemplate="Data: %{x|%d/%m/%Y}<br>Chamados: %{y:.0f}<extra></extra>",
         )
-        bar_chart.update_layout(height=460, xaxis_rangeslider_visible=True)
+        bar_chart.update_layout(height=430, bargap=0.25)
         bar_chart.update_xaxes(title=None, tickvals=tick_dates, tickformat="%d/%m/%Y", tickangle=-35, tickfont=dict(size=10), showgrid=False)
-        bar_chart.update_yaxes(title="Chamados", dtick=1, tickfont=dict(size=11), gridcolor="rgba(148,163,184,.16)")
+        bar_chart.update_yaxes(title="Chamados", dtick=5, tickfont=dict(size=11), gridcolor="rgba(148,163,184,.16)")
         st.plotly_chart(chart_figure(bar_chart), use_container_width=True)
     with chart_b:
         state_data = frame["Estado"].replace("", "Não informado").value_counts().rename_axis("Estado").reset_index(name="Chamados")
         pie_chart = px.pie(state_data, names="Estado", values="Chamados", hole=.58, title="Distribuição do status atual", color_discrete_sequence=["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6"])
-        pie_chart.update_traces(textinfo="percent", texttemplate="%{percent:.0%}", textfont_size=13, hovertemplate="Status: %{label}<br>Chamados: %{value:.0f}<br>Percentual: %{percent:.0%}<extra></extra>")
+        pie_chart.update_traces(textinfo="percent", texttemplate="%{percent:.1%}", textfont_size=12, hovertemplate="Status: %{label}<br>Chamados: %{value:.0f}<br>Percentual: %{percent:.1%}<extra></extra>")
         st.plotly_chart(chart_figure(pie_chart), use_container_width=True)
     st.markdown('<div class="section-label">Fila detalhada</div>', unsafe_allow_html=True)
     table_columns = [column for column in INCIDENT_COLUMNS if column != "Sistema"]
