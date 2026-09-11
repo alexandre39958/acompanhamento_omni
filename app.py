@@ -508,30 +508,25 @@ def render_incidents(frame: pd.DataFrame) -> None:
         timeline["Data"] = timeline["Aberto(a)"].dt.normalize()
         first_day = timeline["Data"].min()
         last_day = timeline["Data"].max()
-        first_week = first_day.to_period("W-SUN").start_time
-        last_week = last_day.to_period("W-SUN").start_time
-        all_weeks = pd.date_range(first_week, last_week, freq="7D")
-        weekly_counts = timeline.groupby(timeline["Data"].dt.to_period("W-SUN").apply(lambda period: period.start_time)).size()
-        weekly_counts = weekly_counts.reindex(all_weeks, fill_value=0).rename("Chamados").reset_index()
-        weekly_counts.columns = ["SemanaInicio", "Chamados"]
-        weekly_counts["SemanaFim"] = weekly_counts["SemanaInicio"] + pd.Timedelta(days=6)
-        weekly_counts["Semana"] = weekly_counts["SemanaInicio"].map(
-            lambda value: f"{month_name((value + pd.Timedelta(days=3)).month).capitalize()} - Semana {(((value + pd.Timedelta(days=3)).day - 1) // 7) + 1}"
-        )
-        weekly_counts["Rótulo"] = weekly_counts["Chamados"].where(weekly_counts["Chamados"].gt(0), "")
-        title = "Volume de abertura por semana"
-        st.markdown(f'<div class="incident-caption">{format_date(first_day)} até {format_date(last_day)} · agrupado por semana</div>', unsafe_allow_html=True)
-        bar_chart = px.bar(weekly_counts, x="Semana", y="Chamados", title=title, text="Rótulo", color_discrete_sequence=["#3b82f6"])
+        all_days = pd.date_range(first_day, last_day, freq="D")
+        daily_counts = timeline.groupby("Data").size().reindex(all_days, fill_value=0).rename("Chamados").reset_index()
+        daily_counts.columns = ["Data", "Chamados"]
+        daily_counts["Rótulo"] = daily_counts["Chamados"].where(daily_counts["Chamados"].gt(0), "")
+        tick_dates = list(all_days[::3])
+        if all_days[-1] not in tick_dates:
+            tick_dates.append(all_days[-1])
+        title = "Volume de Abertura (Dia a Dia)"
+        st.markdown(f'<div class="incident-caption">{format_date(first_day)} até {format_date(last_day)}</div>', unsafe_allow_html=True)
+        bar_chart = px.bar(daily_counts, x="Data", y="Chamados", title=title, text="Rótulo", color_discrete_sequence=["#3b82f6"])
         bar_chart.update_traces(
             texttemplate="%{text}",
             textposition="outside",
             textfont_size=14,
             cliponaxis=False,
-            hovertemplate="Período: %{customdata[0]|%d/%m/%Y} a %{customdata[1]|%d/%m/%Y}<br>Chamados: %{y:.0f}<extra></extra>",
-            customdata=weekly_counts[["SemanaInicio", "SemanaFim"]],
+            hovertemplate="Data: %{x|%d/%m/%Y}<br>Chamados: %{y:.0f}<extra></extra>",
         )
-        bar_chart.update_layout(height=460)
-        bar_chart.update_xaxes(title=None, tickangle=0, tickfont=dict(size=11), showgrid=False)
+        bar_chart.update_layout(height=460, xaxis_rangeslider_visible=True)
+        bar_chart.update_xaxes(title=None, tickvals=tick_dates, tickformat="%d/%m/%Y", tickangle=-35, tickfont=dict(size=10), showgrid=False)
         bar_chart.update_yaxes(title="Chamados", dtick=1, tickfont=dict(size=11), gridcolor="rgba(148,163,184,.16)")
         st.plotly_chart(chart_figure(bar_chart), use_container_width=True)
     with chart_b:
