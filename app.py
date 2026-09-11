@@ -116,6 +116,7 @@ def chart_figure(figure):
         font_color="#cbd5e1",
         title_font_color="#f8fafc",
         margin=dict(l=28, r=28, t=56, b=28),
+        hoverlabel=dict(bgcolor="#0f172a", bordercolor="#3b82f6", font_size=13, font_color="#f8fafc"),
     )
     return figure
 
@@ -411,7 +412,7 @@ def render_improvements(frame: pd.DataFrame) -> None:
             color_discrete_sequence=["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444"],
         )
         gantt.update_yaxes(autorange="reversed", title=None)
-        gantt.update_xaxes(title=None, showgrid=True, gridcolor="rgba(148,163,184,.12)")
+        gantt.update_xaxes(title=None, showgrid=True, gridcolor="rgba(148,163,184,.12)", tickformat="%d/%m/%Y")
         st.plotly_chart(chart_figure(gantt), use_container_width=True)
     else:
         st.info("Adicione Início e Fim à fonte de melhorias para visualizar o roadmap por sprint.")
@@ -497,18 +498,24 @@ def render_incidents(frame: pd.DataFrame) -> None:
     chart_a, chart_b = st.columns(2)
     with chart_a:
         timeline = frame.dropna(subset=["Aberto(a)"]).copy()
-        timeline["Data"] = timeline["Aberto(a)"].dt.date
-        timeline = timeline.groupby(["Data", "Categoria"], as_index=False).size().rename(columns={"size": "Chamados"})
+        timeline["Data"] = timeline["Aberto(a)"].dt.normalize()
+        daily_start = timeline["Data"].min()
+        daily_end = timeline["Data"].max()
+        all_days = pd.date_range(daily_start, daily_end, freq="D")
+        daily_counts = timeline.groupby("Data").size().reindex(all_days, fill_value=0).rename("Chamados").reset_index()
+        daily_counts.columns = ["Data", "Chamados"]
         title = "Volume de abertura (dia a dia)"
-        if not timeline.empty:
-            st.markdown(f'<div class="incident-caption">{format_date(timeline["Data"].min())} até {format_date(timeline["Data"].max())}</div>', unsafe_allow_html=True)
-        bar_chart = px.bar(timeline, x="Data", y="Chamados", color="Categoria", title=title, text="Chamados", color_discrete_sequence=["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b"])
-        bar_chart.update_traces(texttemplate="%{y:.0f}", textposition="outside", textfont_size=10, cliponaxis=False)
+        st.markdown(f'<div class="incident-caption">{format_date(daily_start)} até {format_date(daily_end)} · todos os dias do período</div>', unsafe_allow_html=True)
+        bar_chart = px.bar(daily_counts, x="Data", y="Chamados", title=title, text="Chamados", color_discrete_sequence=["#3b82f6"])
+        bar_chart.update_traces(texttemplate="%{y:.0f}", textposition="outside", textfont_size=13, cliponaxis=False, hovertemplate="Data: %{x|%d/%m/%Y}<br>Chamados: %{y:.0f}<extra></extra>")
+        bar_chart.update_layout(height=460)
+        bar_chart.update_xaxes(title=None, tickformat="%d/%m/%Y", dtick="D1", tickangle=-45, tickfont=dict(size=10), showgrid=False)
+        bar_chart.update_yaxes(title="Chamados", dtick=1, tickfont=dict(size=11), gridcolor="rgba(148,163,184,.16)")
         st.plotly_chart(chart_figure(bar_chart), use_container_width=True)
     with chart_b:
         state_data = frame["Estado"].replace("", "Não informado").value_counts().rename_axis("Estado").reset_index(name="Chamados")
         pie_chart = px.pie(state_data, names="Estado", values="Chamados", hole=.58, title="Distribuição do status atual", color_discrete_sequence=["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6"])
-        pie_chart.update_traces(textinfo="percent", texttemplate="%{percent:.0%}", textfont_size=11, hovertemplate="%{label}: %{value} chamados (%{percent:.0%})<extra></extra>")
+        pie_chart.update_traces(textinfo="percent", texttemplate="%{percent:.0%}", textfont_size=13, hovertemplate="Status: %{label}<br>Chamados: %{value:.0f}<br>Percentual: %{percent:.0%}<extra></extra>")
         st.plotly_chart(chart_figure(pie_chart), use_container_width=True)
     st.markdown('<div class="section-label">Fila detalhada</div>', unsafe_allow_html=True)
     table_columns = [column for column in INCIDENT_COLUMNS if column != "Sistema"]
