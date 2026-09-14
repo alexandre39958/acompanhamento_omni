@@ -1,0 +1,22 @@
+name: Keep OMNI App Alive
+
+on:
+  schedule:
+    # Executa a cada 2 horas, no minuto 0.
+    - cron: "0 */2 * * *"
+  workflow_dispatch:
+
+jobs:
+  ping-streamlit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send HTTP request to Streamlit app
+        env:
+          STREAMLIT_APP_URL: ${{ secrets.STREAMLIT_APP_URL }}
+        run: |
+          STREAMLIT_APP_URL="${STREAMLIT_APP_URL:-https://acompanhamentoomni.streamlit.app/}"
+
+          curl --fail --silent --show-error --location \
+            --connect-timeout 15 \
+            --max-time 60 \
+            --head "$STREAMLIT_APP_URL"
