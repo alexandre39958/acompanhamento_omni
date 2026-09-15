@@ -10,13 +10,13 @@ jobs:
   ping-streamlit:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Streamlit health endpoint
+      - name: Ping public Streamlit app
         run: |
           status_code=$(curl --silent --show-error --output /dev/null --write-out "%{http_code}" \
             --connect-timeout 15 \
             --max-time 60 \
             --max-redirs 0 \
-            https://acompanhamentoomni.streamlit.app/_stcore/health)
+            https://acompanhamentoomni.streamlit.app/)
 
           case "$status_code" in
             2??|3??)
