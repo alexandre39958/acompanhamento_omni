@@ -7,23 +7,40 @@ on:
   workflow_dispatch:
 
 jobs:
-  ping-streamlit:
+  open-streamlit:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping public Streamlit app
-        run: |
-          status_code=$(curl --silent --show-error --output /dev/null --write-out "%{http_code}" \
-            --connect-timeout 15 \
-            --max-time 60 \
-            --max-redirs 0 \
-            https://acompanhamentoomni.streamlit.app/)
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-          case "$status_code" in
-            2??|3??)
-              echo "Streamlit respondeu com HTTP $status_code."
-              ;;
-            *)
-              echo "Streamlit respondeu com HTTP $status_code."
-              exit 1
-              ;;
-          esac
+      - name: Install browser automation
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+
+      - name: Open Streamlit app in a browser
+        run: |
+          node <<'EOF'
+          const { chromium } = require('playwright');
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+
+            try {
+              await page.goto('https://acompanhamentoomni.streamlit.app/', {
+                waitUntil: 'domcontentloaded',
+                timeout: 90000,
+              });
+              await page.waitForTimeout(30000);
+              console.log(`Streamlit aberto: ${await page.title()} (${page.url()})`);
+            } finally {
+              await browser.close();
+            }
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          EOF
