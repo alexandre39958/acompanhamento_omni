@@ -52,7 +52,7 @@ UPDATES_SOURCE = setting(
 )
 CACHE_TTL = int(os.getenv("OMNI_CACHE_TTL_SECONDS", "300"))
 
-IMPROVEMENT_COLUMNS = ["Categoria", "Melhoria", "Descrição", "Prioridade", "Sprint", "Início", "Fim", "Status"]
+IMPROVEMENT_COLUMNS = ["Categoria", "Melhoria", "Descrição", "Prioridade", "Sprint", "Início", "Fim", "Status", "Profissional alocado"]
 INCIDENT_COLUMNS = [
     "Número",
     "Aberto(a)",
@@ -80,6 +80,8 @@ def inject_styles() -> None:
         .stApp { background: radial-gradient(circle at 0% 0%, rgba(59,130,246,.15), transparent 34rem), radial-gradient(circle at 100% 100%, rgba(139,92,246,.1), transparent 32rem), var(--slate-950); color: #f8fafc; }
         [data-testid="stAppViewContainer"] { background: transparent; }
         [data-testid="stHeader"] { background: rgba(2,6,23,.72); }
+        #MainMenu { visibility: hidden; }
+        footer { visibility: hidden !important; }
         [data-testid="stMainBlockContainer"] { max-width: 1450px; padding-top: 2rem; }
         h1, h2, h3 { font-family: 'Space Grotesk', sans-serif !important; letter-spacing: 0 !important; }
         [data-testid="stSidebar"] { background: linear-gradient(180deg, #0b1222, #020617); border-right: 1px solid var(--line); }
@@ -174,9 +176,9 @@ def normalize_improvement_status(value: object) -> str:
     if any(term in key for term in ["desenvolv", "andamento", "execucao", "fazendo", "progresso"]):
         return "Em desenvolvimento"
     if "homolog" in key:
-        return "Homologação"
+        return "Em validação"
     if "backlog" in key:
-        return "Backlog"
+        return "Próximas entregas"
     return str(value).strip()
 
 
@@ -258,6 +260,7 @@ def prepare_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, list[str]]
             "Categoria": ["category"], "Melhoria": ["improvement", "titulo"], "Descrição": ["description"], "Prioridade": ["priority"],
             "Sprint": ["sprint", "ciclo", "iteracao"], "Início": ["inicio", "start", "data inicio"],
             "Fim": ["fim", "end", "data fim", "termino"], "Status": ["status", "estado"],
+            "Profissional alocado": ["profissional alocado", "responsavel", "responsável", "analista", "owner", "atribuido a", "attributed to"],
         },
     )
     incidents = normalize_columns(
@@ -316,7 +319,6 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
         improvement_categories: list[str] = []
         improvement_priorities: list[str] = []
         improvement_sprints: list[str] = []
-        improvement_statuses: list[str] = []
         improvement_search = ""
         incident_categories: list[str] = []
         incident_priorities: list[str] = []
@@ -330,8 +332,11 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
             improvement_categories = select_filter("Categoria", options(improvements, "Categoria"), "improvement_category")
             improvement_priorities = select_filter("Prioridade", options(improvements, "Prioridade"), "improvement_priority")
             improvement_sprints = select_filter("Sprint", options(improvements, "Sprint"), "improvement_sprint")
-            improvement_statuses = select_filter("Status", options(improvements, "Status"), "improvement_status")
             improvement_search = st.text_input("Busca textual", placeholder="Melhoria ou descrição", key="improvement_search")
+            valid_dates = improvements["Início"].dropna()
+            min_date = valid_dates.min().date() if not valid_dates.empty else date.today() - timedelta(days=30)
+            max_date = valid_dates.max().date() if not valid_dates.empty else date.today()
+            date_range = st.date_input("Intervalo de início", value=(min_date, max_date), min_value=min_date, max_value=max_date, key="improvement_date")
         elif section == "Incidentes":
             incident_categories = select_filter("Categoria", options(incidents, "Categoria"), "incident_category")
             incident_priorities = select_filter("Prioridade", options(incidents, "Prioridade"), "incident_priority")
@@ -352,11 +357,12 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
     filtered_improvements = apply_values(filtered_improvements, "Categoria", improvement_categories)
     filtered_improvements = apply_values(filtered_improvements, "Prioridade", improvement_priorities)
     filtered_improvements = apply_values(filtered_improvements, "Sprint", improvement_sprints)
-    filtered_improvements = apply_values(filtered_improvements, "Status", improvement_statuses)
     if improvement_search:
         query = improvement_search.casefold()
         searchable = filtered_improvements["Melhoria"].astype(str) + " " + filtered_improvements["Descrição"].astype(str)
         filtered_improvements = filtered_improvements[searchable.str.casefold().str.contains(query, na=False)]
+    if len(date_range) == 2 and section == "Melhorias":
+        filtered_improvements = filtered_improvements[filtered_improvements["Início"].notna() & filtered_improvements["Início"].dt.date.between(date_range[0], date_range[1])]
     filtered_incidents = incidents.copy()
     for column, selected in [("Categoria", incident_categories), ("Prioridade", incident_priorities), ("Estado", incident_states), ("Atribuição a", incident_assignees), ("Grupo de atribuição", incident_groups)]:
         filtered_incidents = apply_values(filtered_incidents, column, selected)
@@ -372,23 +378,37 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
 
 
 def render_improvements(frame: pd.DataFrame) -> None:
-    st.markdown('<div class="section-label">Portfólio de evolução</div>', unsafe_allow_html=True)
-    st.caption(f"{len(frame):,} melhorias no recorte atual".replace(",", "."))
+    st.markdown('<div class="section-label">Resumo das melhorias</div>', unsafe_allow_html=True)
+    start_values = frame["Início"].dropna()
+    end_values = frame["Fim"].dropna()
+    if not start_values.empty and not end_values.empty:
+        period_start = start_values.min().strftime("%d/%m/%Y")
+        period_end = end_values.max().strftime("%d/%m/%Y")
+    elif not start_values.empty:
+        period_start = start_values.min().strftime("%d/%m/%Y")
+        period_end = start_values.max().strftime("%d/%m/%Y")
+    elif not end_values.empty:
+        period_start = end_values.min().strftime("%d/%m/%Y")
+        period_end = end_values.max().strftime("%d/%m/%Y")
+    else:
+        period_start = "Não informado"
+        period_end = "Não informado"
+    st.caption(f"Período: {period_start} a {period_end}")
     total = len(frame)
     completed = int(frame["Status"].eq("Concluída").sum())
     developing = int(frame["Status"].eq("Em desenvolvimento").sum())
-    homologation = int(frame["Status"].eq("Homologação").sum())
-    backlog = int(frame["Status"].eq("Backlog").sum())
+    validation = int(frame["Status"].eq("Em validação").sum())
+    upcoming = int(frame["Status"].eq("Próximas entregas").sum())
     unreported = int(frame["Status"].eq("Não informado").sum())
     if frame.empty:
         st.info("Nenhuma melhoria corresponde aos filtros selecionados.")
         return
-    status_order = ["Concluída", "Em desenvolvimento", "Homologação", "Backlog", "Não informado"]
-    status_counts = pd.DataFrame({"Status": status_order, "Quantidade": [completed, developing, homologation, backlog, unreported]})
+    status_order = ["Concluída", "Em desenvolvimento", "Em validação", "Próximas entregas", "Não informado"]
+    status_counts = pd.DataFrame({"Status": status_order, "Quantidade": [completed, developing, validation, upcoming, unreported]})
     overview = st.columns(5)
     overview[0].metric("Total de melhorias", format_number(total))
-    for column, label, value in zip(overview[1:], ["Concluídas", "Em desenvolvimento", "Homologação", "Backlog"], [completed, developing, homologation, backlog]):
-        column.metric(label, format_number(value), delta=rounded_percent(value, total))
+    for column, label, value in zip(overview[1:], ["Concluídas", "Em desenvolvimento", "Em validação", "Próximas entregas"], [completed, developing, validation, upcoming]):
+        column.metric(label, format_number(value))
     st.markdown('<div class="section-label">Acompanhamento por status</div>', unsafe_allow_html=True)
     status_chart = px.bar(
         status_counts,
@@ -397,7 +417,7 @@ def render_improvements(frame: pd.DataFrame) -> None:
         text="Quantidade",
         title="Distribuição das melhorias",
         color="Status",
-        color_discrete_map={"Concluída": "#10b981", "Em desenvolvimento": "#3b82f6", "Homologação": "#8b5cf6", "Backlog": "#f59e0b", "Não informado": "#64748b"},
+        color_discrete_map={"Concluída": "#10b981", "Em desenvolvimento": "#3b82f6", "Em validação": "#8b5cf6", "Próximas entregas": "#f59e0b", "Não informado": "#64748b"},
     )
     status_chart.update_traces(texttemplate="%{y:.0f}", textposition="outside", textfont_size=11, cliponaxis=False)
     st.plotly_chart(chart_figure(status_chart), use_container_width=True)
@@ -443,36 +463,20 @@ def render_improvements(frame: pd.DataFrame) -> None:
         priority_data = frame["Prioridade"].replace("", "Não informado").value_counts().rename_axis("Prioridade").reset_index(name="Quantidade")
         st.plotly_chart(chart_figure(px.bar(priority_data, x="Prioridade", y="Quantidade", title="Volume por prioridade", color="Prioridade", color_discrete_sequence=["#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6"])), use_container_width=True)
     st.markdown('<div class="section-label">Detalhamento</div>', unsafe_allow_html=True)
+    detail_statuses = st.multiselect(
+        "Status",
+        options=sorted(frame["Status"].dropna().astype(str).unique().tolist()),
+        default=[],
+        key="detail_improvement_status",
+        placeholder="Todos",
+    )
+    if detail_statuses:
+        frame = frame[frame["Status"].astype(str).isin(detail_statuses)].copy()
     table = frame[IMPROVEMENT_COLUMNS].sort_values(["Sprint", "Início", "Prioridade", "Categoria"])
     for column in ["Início", "Fim"]:
         table[column] = pd.to_datetime(table[column], errors="coerce").dt.strftime("%d/%m/%Y")
     csv_download(table, "omni_melhorias.csv", "⇩ Exportar melhorias")
     st.dataframe(table, hide_index=True, use_container_width=True, height=360)
-
-
-def render_updates(frame: pd.DataFrame) -> None:
-    st.markdown('<div class="section-label">PRs e mudanças recentes</div>', unsafe_allow_html=True)
-    if frame.empty:
-        st.info("Nenhuma atualização configurada. Adicione uma aba ou planilha com a URL em OMNI_ATUALIZACOES_CSV_URL.")
-        st.markdown("**Colunas esperadas:** `PR`, `SERVICE NOW`, `TEMA`, `SERVIÇOS`, `OBSERVAÇÕES` e `Mês`.")
-        return
-    total = len(frame)
-    valid_prs = frame["PR"].astype(str).str.strip().replace("-", "")
-    valid_incidents = frame["Service Now"].astype(str).str.strip().replace("-", "")
-    services = frame["Serviços"].astype(str).str.split(",").explode().str.strip().replace("", pd.NA).dropna()
-    st.caption(f"{format_number(total)} registros no recorte atual")
-    cards = st.columns(4)
-    cards[0].metric("Registros", format_number(total))
-    cards[1].metric("PRs identificadas", format_number(valid_prs.ne("").sum()))
-    cards[2].metric("Chamados vinculados", format_number(valid_incidents.ne("").sum()))
-    cards[3].metric("Serviços envolvidos", format_number(services.nunique()))
-    service_data = services.value_counts().rename_axis("Serviço").reset_index(name="Registros")
-    chart = px.bar(service_data, x="Serviço", y="Registros", text="Registros", title="PRs por serviço", color_discrete_sequence=["#3b82f6"])
-    chart.update_traces(texttemplate="%{y:.0f}", textposition="outside", textfont_size=10, cliponaxis=False)
-    st.plotly_chart(chart_figure(chart), use_container_width=True)
-    table = frame[UPDATE_COLUMNS].copy()
-    csv_download(table, "omni_atualizacoes.csv", "⇩ Exportar atualizações")
-    st.dataframe(table, hide_index=True, use_container_width=True, height=420)
 
 
 def render_incidents(frame: pd.DataFrame) -> None:
@@ -551,17 +555,15 @@ def render_incidents(frame: pd.DataFrame) -> None:
 def main() -> None:
     inject_styles()
     improvements, incidents, updates, errors = prepare_data()
-    st.markdown('<div class="hero"><div class="eyebrow">OMNI / Acompanhamento</div><h1>Painel de Gestão - OMNI</h1><p>Visão executiva do portfólio de melhorias e da operação de incidentes, com dados atualizados a partir das fontes corporativas.</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero"><div class="eyebrow">OMNI / Acompanhamento</div><h1>Painel de acompanhamento de atividades OMNI Sesi</h1><p>Visão executiva do portfólio de melhorias e da operação de incidentes, com dados atualizados a partir das fontes corporativas.</p></div>', unsafe_allow_html=True)
     for error in errors:
         st.warning(error)
-    section = st.radio("Seção", ["Melhorias", "Incidentes", "Últimas atualizações"], horizontal=True, label_visibility="collapsed", key="active_section")
+    section = st.radio("Seção", ["Melhorias", "Incidentes"], horizontal=True, label_visibility="collapsed", key="active_section")
     filtered_improvements, filtered_incidents, filtered_updates, _, _ = render_sidebar(improvements, incidents, updates, section)
     if section == "Melhorias":
         render_improvements(filtered_improvements)
-    elif section == "Incidentes":
-        render_incidents(filtered_incidents)
     else:
-        render_updates(filtered_updates)
+        render_incidents(filtered_incidents)
 
 
 if __name__ == "__main__":
