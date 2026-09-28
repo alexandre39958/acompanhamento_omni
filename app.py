@@ -442,7 +442,7 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
         st.divider()
         st.caption(f"Atualização automática: a cada {CACHE_TTL // 60 or 1} min")
 
-    # Aplicando filtros nas Melhorias (incluindo Status)
+# Aplicando filtros nas Melhorias (incluindo Status)
     filtered_improvements = improvements.copy()
     filtered_improvements = apply_values(filtered_improvements, "Status", improvement_statuses)
     filtered_improvements = apply_values(filtered_improvements, "Categoria", improvement_categories)
@@ -455,8 +455,9 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
     if len(date_range) == 2 and section == "Melhorias":
         start_ts = pd.Timestamp(date_range[0])
         end_ts = pd.Timestamp(date_range[1]) + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1)
+        # Mantém se a data for vazia (isna) OU estiver dentro do intervalo escolhido
         filtered_improvements = filtered_improvements[
-            filtered_improvements["Início"].notna() & 
+            filtered_improvements["Início"].isna() | 
             filtered_improvements["Início"].between(start_ts, end_ts)
         ]
     
@@ -468,8 +469,9 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
     if len(date_range) == 2 and section == "Incidentes":
         start_ts = pd.Timestamp(date_range[0])
         end_ts = pd.Timestamp(date_range[1]) + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1)
+        # Mantém se a data de atualização for vazia (isna) OU estiver dentro do intervalo
         filtered_incidents = filtered_incidents[
-            filtered_incidents["Atualizado em"].notna() & 
+            filtered_incidents["Atualizado em"].isna() | 
             filtered_incidents["Atualizado em"].between(start_ts, end_ts)
         ]
     
