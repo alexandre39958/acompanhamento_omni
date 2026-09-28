@@ -54,7 +54,7 @@ UPDATES_SOURCE = setting(
 )
 CACHE_TTL = int(os.getenv("OMNI_CACHE_TTL_SECONDS", "300"))
 
-# Mapeamento de colunas principais para exibição nas tabelas (sem Sprint)
+# Mapeamento de colunas principais para exibição
 IMPROVEMENT_COLUMNS = [
     "Categoria",
     "Melhoria",
@@ -76,7 +76,7 @@ INCIDENT_COLUMNS = [
 ]
 
 
-# Injeção dos estilos CSS para remoção completa de elementos da plataforma
+# Injeção dos estilos CSS para o Kanban e ajuste de exibição do cabeçalho
 def inject_styles() -> None:
     st.markdown(
         """
@@ -94,51 +94,28 @@ def inject_styles() -> None:
             color: var(--text-color) !important;
         }
 
-        /* -------------------------------------------------------------
-           1. OCULTAÇÃO COMPLETA DO CABEÇALHO (Git, Fork, Deploy, 3 Pontos)
-        ------------------------------------------------------------- */
-        header, 
-        [data-testid="stHeader"], 
-        #MainMenu, 
-        [data-testid="stAppDeployButton"], 
-        [data-testid="stHeaderActionElements"] {
+        /* Oculta apenas os menus/deploy mantendo o botão de reabrir a sidebar funcional */
+        #MainMenu, [data-testid="stAppDeployButton"] {
+            display: none !important;
+        }
+        [data-testid="stHeader"] {
+            background-color: transparent !important;
+            z-index: 100 !important;
+        }
+
+        footer, [data-testid="stFooter"], [data-testid="stStatusWidget"], .stAppBadge, div[class*="viewerBadge"] {
             display: none !important;
             visibility: hidden !important;
             height: 0 !important;
         }
 
-        /* -------------------------------------------------------------
-           2. OCULTAÇÃO COMPLETA DO RODAPÉ E BADGES (Canto inferior direito)
-        ------------------------------------------------------------- */
-        footer, 
-        [data-testid="stFooter"], 
-        [data-testid="stStatusWidget"],
-        .stAppBadge,
-        div[class*="viewerBadge"],
-        a[class*="viewerBadge"],
-        div[class*="ProfileButton"],
-        div[class*="styles_viewerBadge"],
-        div[class*="stAppViewerBadge"],
-        .viewerBadge_container__1QSob {
-            display: none !important;
-            visibility: hidden !important;
-            height: 0 !important;
-        }
-
-        /* Ajuste de espaçamento superior */
         [data-testid="stMainBlockContainer"] { 
-            max-width: 1450px; 
+            max-width: 1550px; 
             padding-top: 1.5rem !important; 
         }
 
-        /* Barra lateral */
         [data-testid="stSidebar"] {
             border-right: 1px solid rgba(128, 128, 128, 0.2);
-        }
-        [data-testid="stSidebar"] .stMultiSelect div[data-baseweb="select"], 
-        [data-testid="stSidebar"] input {
-            background: var(--secondary-background-color);
-            border-color: rgba(128, 128, 128, 0.3);
         }
 
         /* Cartão do cabeçalho principal */
@@ -162,12 +139,6 @@ def inject_styles() -> None:
             line-height: 1;
             margin: .28rem 0 .5rem;
         }
-        .hero p {
-            opacity: 0.8;
-            margin: 0;
-            max-width: 760px;
-            font-size: 1.05rem;
-        }
 
         /* Cartões de métricas KPI */
         [data-testid="stMetric"] {
@@ -176,14 +147,6 @@ def inject_styles() -> None:
             padding: 1rem;
             border-radius: 1rem;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
-        }
-        [data-testid="stMetricLabel"] {
-            opacity: 0.8;
-            font-weight: 500;
-        }
-        [data-testid="stMetricValue"] {
-            font-family: 'Space Grotesk', sans-serif;
-            color: var(--text-color);
         }
 
         .section-label {
@@ -195,34 +158,49 @@ def inject_styles() -> None:
             margin: 1.5rem 0 .4rem;
         }
 
-        /* Tabelas e seletores */
-        div[data-testid="stDataFrame"] {
-            border: 1px solid rgba(128, 128, 128, 0.2);
-            border-radius: 1rem;
-            overflow: hidden;
-            background: var(--secondary-background-color);
-        }
-
-        button[data-baseweb="tab"] { font-weight: 600; }
-        div[role="radiogroup"] { gap: .45rem; }
-        div[role="radiogroup"] label {
-            background: var(--secondary-background-color);
-            border: 1px solid rgba(128, 128, 128, 0.2);
-            border-radius: .7rem;
-            padding: .35rem .8rem;
-        }
-        div[role="radiogroup"] label:has(input:checked) {
-            background: rgba(59, 130, 246, 0.15);
-            border-color: var(--primary-color);
-        }
-
-        .incident-spacer { height: 1.25rem; }
-        .incident-caption { opacity: 0.8; font-size: .85rem; margin: .1rem 0 .45rem; }
         div[data-testid="stPlotlyChart"] {
             background: var(--secondary-background-color);
             border: 1px solid rgba(128, 128, 128, 0.2);
             border-radius: 1rem;
             padding: .5rem;
+        }
+
+        /* Estilização específica dos cartões Kanban */
+        .kanban-card {
+            background: var(--secondary-background-color);
+            border: 1px solid rgba(128, 128, 128, 0.2);
+            border-radius: 0.75rem;
+            padding: 0.85rem;
+            margin-bottom: 0.65rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+            transition: transform 0.1s ease, border-color 0.1s ease;
+        }
+        .kanban-card:hover {
+            border-color: var(--primary-color);
+        }
+        .kanban-card-title {
+            font-weight: 700;
+            font-size: 0.9rem;
+            margin-bottom: 0.35rem;
+            line-height: 1.3;
+        }
+        .kanban-badge {
+            display: inline-block;
+            padding: 0.15rem 0.45rem;
+            border-radius: 0.35rem;
+            font-size: 0.68rem;
+            font-weight: 600;
+            margin-right: 0.25rem;
+            margin-bottom: 0.35rem;
+        }
+        .kanban-meta {
+            font-size: 0.75rem;
+            opacity: 0.75;
+            display: flex;
+            justify-content: space-between;
+            margin-top: 0.4rem;
+            padding-top: 0.35rem;
+            border-top: 1px dashed rgba(128,128,128,0.2);
         }
         </style>
         """,
@@ -230,7 +208,6 @@ def inject_styles() -> None:
     )
 
 
-# Aplica transparência aos gráficos Plotly
 def chart_figure(figure):
     figure.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
@@ -241,22 +218,21 @@ def chart_figure(figure):
     return figure
 
 
-# Utilitários de formatação
 def format_number(value: int | float) -> str:
     return f"{value:,.0f}".replace(",", ".")
 
 
 def format_date(value: object) -> str:
+    if pd.isna(value):
+        return "-"
     return pd.Timestamp(value).strftime("%d/%m/%Y")
 
 
-# Normalização de strings para buscas e comparações
 def canonical(value: object) -> str:
     text = unicodedata.normalize("NFKD", str(value)).encode("ascii", "ignore").decode("ascii")
     return re.sub(r"[^a-z0-9]+", "", text.lower())
 
 
-# Mapeia valores brutos de status
 def normalize_improvement_status(value: object) -> str:
     if pd.isna(value):
         return "Não informado"
@@ -267,14 +243,13 @@ def normalize_improvement_status(value: object) -> str:
         return "Concluída"
     if any(term in key for term in ["desenvolv", "andamento", "execucao", "fazendo", "progresso"]):
         return "Em desenvolvimento"
-    if "homolog" in key:
+    if "homolog" in key or "validac" in key:
         return "Em validação"
-    if "backlog" in key:
+    if "backlog" in key or "proxima" in key:
         return "Próximas entregas"
     return str(value).strip()
 
 
-# Converte strings para datas pandas
 def parse_improvement_date(value: object) -> pd.Timestamp:
     if pd.isna(value) or not str(value).strip():
         return pd.NaT
@@ -284,7 +259,6 @@ def parse_improvement_date(value: object) -> pd.Timestamp:
     return pd.to_datetime(text, errors="coerce", dayfirst=True)
 
 
-# Localiza colunas no dataframe
 def resolve_column(columns: Iterable[object], aliases: Iterable[str]) -> str | None:
     by_key = {canonical(column): str(column) for column in columns}
     for alias in aliases:
@@ -293,7 +267,6 @@ def resolve_column(columns: Iterable[object], aliases: Iterable[str]) -> str | N
     return None
 
 
-# Renomeia colunas para o padrão
 def normalize_columns(frame: pd.DataFrame, schema: dict[str, list[str]]) -> pd.DataFrame:
     renamed: dict[str, str] = {}
     for target, aliases in schema.items():
@@ -307,7 +280,6 @@ def normalize_columns(frame: pd.DataFrame, schema: dict[str, list[str]]) -> pd.D
     return result
 
 
-# Formata URL do SharePoint para download direto
 def downloadable_url(source: str) -> str:
     if "sharepoint.com/" not in source.lower():
         return source
@@ -317,7 +289,6 @@ def downloadable_url(source: str) -> str:
     return urlunparse(parsed._replace(query=urlencode(query)))
 
 
-# Carrega e memoriza (cache) os dados externos
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def load_source(source: str, source_name: str) -> tuple[pd.DataFrame, str | None]:
     try:
@@ -347,7 +318,6 @@ def load_source(source: str, source_name: str) -> tuple[pd.DataFrame, str | None
         return pd.DataFrame(), f"Não foi possível carregar {source_name}: {exc}"
 
 
-# Processa e prepara os dados (sem referência a Sprint)
 def prepare_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, list[str]]:
     improvements, improvement_error = load_source(IMPROVEMENTS_SOURCE, "melhorias")
     incidents, incident_error = load_source(INCIDENTS_SOURCE, "incidentes")
@@ -359,28 +329,24 @@ def prepare_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, list[str]]
             "Categoria": ["category"], "Melhoria": ["improvement", "titulo"], "Descrição": ["description"], "Prioridade": ["priority"],
             "Início": ["inicio", "start", "data inicio"], "Fim": ["fim", "end", "data fim", "termino"],
             "Status": ["status", "estado"],
-            "Profissional alocado": ["profissional alocado", "responsavel", "responsável", "analista", "owner", "atribuido a", "attributed to"],
+            "Profissional alocado": ["profissional alocado", "responsavel", "responsável", "analista", "owner", "atribuido a"],
         },
     )
     incidents = normalize_columns(
         incidents,
         {
-            "Número": ["numero", "number", "ticket", "incidente"], "Aberto(a)": ["aberto", "opened", "data abertura"],
-            "Resumo": ["descricao resumida", "short description", "descricao", "resumo", "summary"], "Solicitante": ["requester"],
+            "Número": ["numero", "number", "ticket"], "Aberto(a)": ["aberto", "opened"],
+            "Resumo": ["short description", "descricao"], "Solicitante": ["requester"],
             "Prioridade": ["priority"], "Estado": ["state", "status"], "Categoria": ["category"],
-            "Grupo de atribuição": ["assignment group", "grupo"], "Atribuição a": ["assigned to", "atribuido a", "analista"],
-            "Atualizado em": ["updated", "updated at", "data atualizacao"], "Sistema": ["system", "sistema"],
+            "Grupo de atribuição": ["assignment group"], "Atribuição a": ["assigned to"],
+            "Atualizado em": ["updated"], "Sistema": ["system"],
         },
     )
     updates = normalize_columns(
         updates,
         {
-            "PR": ["numero do card", "card", "devops", "pull request", "número", "setembro"],
-            "Service Now": ["service now", "chamado", "incident", "incidente", "numero incidente"],
-            "Tema": ["assunto", "titulo", "título"],
-            "Serviços": ["servicos", "serviços", "servico", "serviço", "servicos afetados"],
-            "Observações": ["observacoes", "observações", "obs", "comentarios", "comentários"],
-            "Mês": ["mes", "mês", "month"],
+            "PR": ["numero do card", "card"], "Service Now": ["service now", "chamado"],
+            "Tema": ["assunto", "titulo"], "Serviços": ["servicos"], "Observações": ["observacoes"], "Mês": ["mes"],
         },
     )
     
@@ -392,48 +358,52 @@ def prepare_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, list[str]]
     improvements["Fim"] = improvements["Fim"].map(parse_improvement_date)
     improvements["Status"] = improvements["Status"].map(normalize_improvement_status)
     
-    return improvements.fillna(""), incidents.fillna(""), updates.fillna(""), [error for error in [improvement_error, incident_error, updates_error] if error]
+    return improvements.fillna(""), incidents.fillna(""), updates.fillna(""), [e for e in [improvement_error, incident_error, updates_error] if e]
 
 
-# Obtenção de opções para seletores
 def options(frame: pd.DataFrame, column: str) -> list[str]:
     return sorted(value for value in frame[column].astype(str).unique() if value.strip())
 
 
-# Filtro multiselect
 def select_filter(label: str, values: list[str], key: str) -> list[str]:
     return st.multiselect(label, values, default=[], key=key, placeholder="Todos")
 
 
-# Aplica filtros
 def apply_values(frame: pd.DataFrame, column: str, selected: list[str]) -> pd.DataFrame:
     return frame if not selected else frame[frame[column].astype(str).isin(selected)]
 
 
-# Botão de exportação CSV
 def csv_download(frame: pd.DataFrame, filename: str, label: str) -> None:
     payload = frame.to_csv(index=False).encode("utf-8-sig")
     st.download_button(label, data=payload, file_name=filename, mime="text/csv", use_container_width=False)
 
 
-# Barra lateral de filtros (sem o filtro de Sprint)
-def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates: pd.DataFrame, section: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str, tuple[date, date]]:
+# Mapeamento dinâmico de cores para Prioridade (Bolinhas coloridas ●)
+def get_priority_style(priority_value: str) -> tuple[str, str]:
+    key = canonical(priority_value)
+    if "alta" in key or "alto" in key:
+        return "rgba(239, 68, 68, 0.15)", "#ef4444"    # Vermelho
+    if "media" in key or "medio" in key:
+        return "rgba(245, 158, 11, 0.15)", "#f59e0b"   # Amarelo/Laranja
+    if "baixa" in key or "baixo" in key:
+        return "rgba(16, 185, 129, 0.15)", "#10b981"   # Verde
+    return "rgba(100, 116, 139, 0.15)", "#64748b"       # Cinza neutro
+
+
+# Barra lateral com inclusão do Filtro de Status
+def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates: pd.DataFrame, section: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     with st.sidebar:
         st.markdown("## OMNI\n**Governança operacional**")
         st.caption(f"Filtros de {section.lower()}")
-        improvement_categories: list[str] = []
-        improvement_priorities: list[str] = []
+        improvement_statuses, improvement_categories, improvement_priorities = [], [], []
         improvement_search = ""
-        incident_categories: list[str] = []
-        incident_priorities: list[str] = []
-        incident_states: list[str] = []
-        incident_assignees: list[str] = []
-        incident_groups: list[str] = []
-        update_months: list[str] = []
+        incident_categories, incident_priorities, incident_states, incident_assignees, incident_groups = [], [], [], [], []
+        update_months = []
         update_search = ""
-        date_range: tuple[date, date] = (date.today(), date.today())
+        date_range = (date.today(), date.today())
         
         if section == "Melhorias":
+            improvement_statuses = select_filter("Status", options(improvements, "Status"), "improvement_status")
             improvement_categories = select_filter("Categoria", options(improvements, "Categoria"), "improvement_category")
             improvement_priorities = select_filter("Prioridade", options(improvements, "Prioridade"), "improvement_priority")
             improvement_search = st.text_input("Busca textual", placeholder="Melhoria ou descrição", key="improvement_search")
@@ -451,15 +421,13 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
             min_date = valid_dates.min().date() if not valid_dates.empty else date.today() - timedelta(days=30)
             max_date = valid_dates.max().date() if not valid_dates.empty else date.today()
             date_range = st.date_input("Intervalo de atualização", value=(min_date, max_date), min_value=min_date, max_value=max_date, key="incident_date")
-        else:
-            update_months = select_filter("Mês", options(updates, "Mês"), "update_month")
-            update_search = st.text_input("Busca textual", placeholder="Tema, PR ou serviço", key="update_search")
             
         st.divider()
         st.caption(f"Atualização automática: a cada {CACHE_TTL // 60 or 1} min")
 
-    # Aplicação dos filtros às Melhorias
+    # Aplicando filtros nas Melhorias (incluindo Status)
     filtered_improvements = improvements.copy()
+    filtered_improvements = apply_values(filtered_improvements, "Status", improvement_statuses)
     filtered_improvements = apply_values(filtered_improvements, "Categoria", improvement_categories)
     filtered_improvements = apply_values(filtered_improvements, "Prioridade", improvement_priorities)
     if improvement_search:
@@ -469,137 +437,210 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
     if len(date_range) == 2 and section == "Melhorias":
         filtered_improvements = filtered_improvements[filtered_improvements["Início"].notna() & filtered_improvements["Início"].dt.date.between(date_range[0], date_range[1])]
     
-    # Aplicação dos filtros aos Incidentes
+    # Aplicando filtros nos Incidentes
     filtered_incidents = incidents.copy()
-    for column, selected in [("Categoria", incident_categories), ("Prioridade", incident_priorities), ("Estado", incident_states), ("Atribuição a", incident_assignees), ("Grupo de atribuição", incident_groups)]:
-        filtered_incidents = apply_values(filtered_incidents, column, selected)
-    if len(date_range) == 2:
+    for col, sel in [("Categoria", incident_categories), ("Prioridade", incident_priorities), ("Estado", incident_states), ("Atribuição a", incident_assignees), ("Grupo de atribuição", incident_groups)]:
+        filtered_incidents = apply_values(filtered_incidents, col, sel)
+    if len(date_range) == 2 and section == "Incidentes":
         filtered_incidents = filtered_incidents[filtered_incidents["Atualizado em"].dt.date.between(date_range[0], date_range[1])]
     
-    # Aplicação dos filtros de Atualizações
-    filtered_updates = updates.copy()
-    filtered_updates = apply_values(filtered_updates, "Mês", update_months)
-    if update_search:
-        query = update_search.casefold()
-        searchable = filtered_updates.astype(str).agg(" ".join, axis=1)
-        filtered_updates = filtered_updates[searchable.str.casefold().str.contains(query, na=False)]
+    filtered_updates = apply_values(updates.copy(), "Mês", update_months)
+    return filtered_improvements, filtered_incidents, filtered_updates
+
+
+# Renderizador de Card individual do Kanban
+def render_kanban_card(row: pd.Series) -> str:
+    categoria = row['Categoria'] if row['Categoria'] else 'Geral'
+    prioridade = row['Prioridade'] if row['Prioridade'] else 'Normal'
+    responsavel = row['Profissional alocado'] if row['Profissional alocado'] else 'Não atribuído'
+    dt_inicio = format_date(row['Início'])
+    desc = str(row['Descrição'])
+    if len(desc) > 75:
+        desc = desc[:75] + "..."
         
-    return filtered_improvements, filtered_incidents, filtered_updates, improvement_search, date_range
+    prio_bg, prio_color = get_priority_style(prioridade)
+
+    return f"""
+    <div class="kanban-card">
+        <div class="kanban-card-title">{row['Melhoria']}</div>
+        <div>
+            <span class="kanban-badge" style="background:rgba(59, 130, 246, 0.15); color:#3b82f6;">🏷️ {categoria}</span>
+            <span class="kanban-badge" style="background:{prio_bg}; color:{prio_color};">● {prioridade}</span>
+        </div>
+        <div style="font-size: 0.78rem; opacity: 0.8; margin-top: 0.2rem;">{desc}</div>
+        <div class="kanban-meta">
+            <span>👤 {responsavel}</span>
+            <span>📅 {dt_inicio}</span>
+        </div>
+    </div>
+    """
 
 
-# Desenha o painel de Melhorias reorganizado
+# Quadro Kanban com mecanismo "Ver mais" retrátil por coluna
+def render_kanban_board(frame: pd.DataFrame) -> None:
+    st.markdown('<div class="section-label">Quadro Kanban de Melhorias</div>', unsafe_allow_html=True)
+    
+    columns_config = [
+        {"title": "Próximas entregas", "color": "#f59e0b", "bg": "#f59e0b18"},
+        {"title": "Em desenvolvimento", "color": "#3b82f6", "bg": "#3b82f618"},
+        {"title": "Em validação", "color": "#8b5cf6", "bg": "#8b5cf618"},
+        {"title": "Concluída", "color": "#10b981", "bg": "#10b98118"},
+    ]
+    
+    if (frame["Status"] == "Não informado").any():
+        columns_config.append({"title": "Não informado", "color": "#64748b", "bg": "#64748b18"})
+
+    cols = st.columns(len(columns_config))
+    CARDS_LIMITE_INICIAL = 3  # Número de cards visíveis diretamente antes de recolher
+
+    for col, cfg in zip(cols, columns_config):
+        status_name = cfg["title"]
+        items = frame[frame["Status"] == status_name]
+        
+        with col:
+            # Cabeçalho da coluna
+            st.markdown(
+                f"""
+                <div style="background:{cfg['bg']}; border-top: 3px solid {cfg['color']}; padding: 8px 12px; border-radius: 8px 8px 0 0; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: 700; font-size: 0.88rem;">{status_name}</span>
+                    <span style="background: {cfg['color']}; color: white; border-radius: 12px; padding: 2px 8px; font-size: 0.72rem; font-weight: 700;">{len(items)}</span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            
+            if items.empty:
+                st.caption("Nenhum item")
+            else:
+                visible_items = items.iloc[:CARDS_LIMITE_INICIAL]
+                hidden_items = items.iloc[CARDS_LIMITE_INICIAL:]
+                
+                # Exibe primeiros N cards
+                for _, row in visible_items.iterrows():
+                    st.markdown(render_kanban_card(row), unsafe_allow_html=True)
+                
+                # Se houver excedentes, agrupa em seção retrátil "Ver mais"
+                if not hidden_items.empty:
+                    with st.expander(f"➕ Ver mais {len(hidden_items)} item(ns)", expanded=False):
+                        for _, row in hidden_items.iterrows():
+                            st.markdown(render_kanban_card(row), unsafe_allow_html=True)
+
+
+# Desenha a seção de Melhorias na ordem reestruturada
 def render_improvements(frame: pd.DataFrame) -> None:
-    st.markdown('<div class="section-label">Resumo das melhorias</div>', unsafe_allow_html=True)
     start_values = frame["Início"].dropna()
     end_values = frame["Fim"].dropna()
     if not start_values.empty and not end_values.empty:
-        period_start = start_values.min().strftime("%d/%m/%Y")
-        period_end = end_values.max().strftime("%d/%m/%Y")
-    elif not start_values.empty:
-        period_start = start_values.min().strftime("%d/%m/%Y")
-        period_end = start_values.max().strftime("%d/%m/%Y")
-    elif not end_values.empty:
-        period_start = end_values.min().strftime("%d/%m/%Y")
-        period_end = end_values.max().strftime("%d/%m/%Y")
+        period_str = f"Período: {start_values.min().strftime('%d/%m/%Y')} a {end_values.max().strftime('%d/%m/%Y')}"
     else:
-        period_start = "Não informado"
-        period_end = "Não informado"
-        
-    st.caption(f"Período: {period_start} a {period_end}")
+        period_str = "Período: Não informado"
+    st.caption(period_str)
     
+    if frame.empty:
+        st.info("Nenhuma melhoria encontrada para os filtros selecionados.")
+        return
+
+    # Métricas
     total = len(frame)
     completed = int(frame["Status"].eq("Concluída").sum())
     developing = int(frame["Status"].eq("Em desenvolvimento").sum())
     validation = int(frame["Status"].eq("Em validação").sum())
     upcoming = int(frame["Status"].eq("Próximas entregas").sum())
     unreported = int(frame["Status"].eq("Não informado").sum())
-    
-    if frame.empty:
-        st.info("Nenhuma melhoria corresponde aos filtros selecionados.")
-        return
-        
-    status_order = ["Concluída", "Em desenvolvimento", "Em validação", "Próximas entregas", "Não informado"]
-    status_counts = pd.DataFrame({"Status": status_order, "Quantidade": [completed, developing, validation, upcoming, unreported]})
-    
-    # 1. Cards de indicadores executivos
+
+    # 1. Indicadores (KPIs)
+    st.markdown('<div class="section-label">Indicadores executivos</div>', unsafe_allow_html=True)
     overview = st.columns(5)
     overview[0].metric("Total de melhorias", format_number(total))
-    for column, label, value in zip(overview[1:], ["Concluídas", "Em desenvolvimento", "Em validação", "Próximas entregas"], [completed, developing, validation, upcoming]):
-        column.metric(label, format_number(value))
-        
-    # 2. Gráfico de acompanhamento por status posicionado diretamente abaixo dos cards
+    overview[1].metric("Concluídas", format_number(completed))
+    overview[2].metric("Em desenvolvimento", format_number(developing))
+    overview[3].metric("Em validação", format_number(validation))
+    overview[4].metric("Próximas entregas", format_number(upcoming))
+
+    # 2. Volume por status (Gráfico)
     st.markdown('<div class="section-label">Acompanhamento por status</div>', unsafe_allow_html=True)
+    status_counts = pd.DataFrame({
+        "Status": ["Concluída", "Em desenvolvimento", "Em validação", "Próximas entregas", "Não informado"],
+        "Quantidade": [completed, developing, validation, upcoming, unreported]
+    })
+    status_counts = status_counts[status_counts["Quantidade"] > 0]
+    
     status_chart = px.bar(
         status_counts,
         x="Status",
         y="Quantidade",
         text="Quantidade",
-        title="Distribuição das melhorias por status",
+        title="Volume atual por status",
         color="Status",
         color_discrete_map={"Concluída": "#10b981", "Em desenvolvimento": "#3b82f6", "Em validação": "#8b5cf6", "Próximas entregas": "#f59e0b", "Não informado": "#64748b"},
     )
     status_chart.update_traces(texttemplate="%{y:.0f}", textposition="outside", textfont_size=11, cliponaxis=False)
     st.plotly_chart(chart_figure(status_chart), use_container_width=True)
 
-    # 3. Gráficos de Categoria e Prioridade lado a lado
+    # 3. Quadro Kanban Retrátil
+    render_kanban_board(frame)
+
+    # 4. Gráficos de Categoria (Gráfico de Barras Horizontal para legibilidade) e Prioridade
+    st.markdown('<div class="section-label">Análise de Categoria e Prioridade</div>', unsafe_allow_html=True)
     left, right = st.columns(2)
     with left:
-        category_data = frame["Categoria"].replace("", "Não informado").value_counts().rename_axis("Categoria").reset_index(name="Quantidade")
-        st.plotly_chart(chart_figure(px.pie(category_data, names="Categoria", values="Quantidade", hole=.55, title="Composição por categoria", color_discrete_sequence=["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444"])), use_container_width=True)
+        category_data = (
+            frame["Categoria"]
+            .replace("", "Não informado")
+            .value_counts()
+            .rename_axis("Categoria")
+            .reset_index(name="Quantidade")
+            .sort_values("Quantidade", ascending=True)
+        )
+        category_chart = px.bar(
+            category_data,
+            x="Quantidade",
+            y="Categoria",
+            orientation="h",
+            title="Composição por categoria",
+            text="Quantidade",
+            color="Quantidade",
+            color_continuous_scale="Blues",
+        )
+        category_chart.update_layout(coloraxis_showscale=False)
+        category_chart.update_traces(textposition="outside", cliponaxis=False)
+        st.plotly_chart(chart_figure(category_chart), use_container_width=True)
+        
     with right:
         priority_data = frame["Prioridade"].replace("", "Não informado").value_counts().rename_axis("Prioridade").reset_index(name="Quantidade")
-        st.plotly_chart(chart_figure(px.bar(priority_data, x="Prioridade", y="Quantidade", title="Volume por prioridade", color="Prioridade", color_discrete_sequence=["#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6"])), use_container_width=True)
-        
-    # 4. Tabela detalhada completa com filtro de status integrado
-    st.markdown('<div class="section-label">Detalhamento</div>', unsafe_allow_html=True)
-    detail_statuses = st.multiselect(
-        "Filtrar por Status",
-        options=sorted(frame["Status"].dropna().astype(str).unique().tolist()),
-        default=[],
-        key="detail_improvement_status",
-        placeholder="Todos os status",
-    )
-    
-    filtered_table_frame = frame.copy()
-    if detail_statuses:
-        filtered_table_frame = filtered_table_frame[filtered_table_frame["Status"].astype(str).isin(detail_statuses)]
-        
-    table = filtered_table_frame[IMPROVEMENT_COLUMNS].sort_values(["Início", "Prioridade", "Categoria"])
-    for column in ["Início", "Fim"]:
-        table[column] = pd.to_datetime(table[column], errors="coerce").dt.strftime("%d/%m/%Y")
-        
-    csv_download(table, "omni_melhorias.csv", "⇩ Exportar melhorias")
-    st.dataframe(table, hide_index=True, use_container_width=True, height=380)
+        priority_chart = px.bar(
+            priority_data,
+            x="Prioridade",
+            y="Quantidade",
+            title="Volume por prioridade",
+            color="Prioridade",
+            color_discrete_map={
+                "Alta": "#ef4444",
+                "Alto": "#ef4444",
+                "Média": "#f59e0b",
+                "Médio": "#f59e0b",
+                "Baixa": "#10b981",
+                "Baixo": "#10b981",
+                "Não informado": "#64748b"
+            }
+        )
+        st.plotly_chart(chart_figure(priority_chart), use_container_width=True)
+
+    # 5. Exportação
+    st.markdown("---")
+    table_to_export = frame[IMPROVEMENT_COLUMNS].copy()
+    for col in ["Início", "Fim"]:
+        table_to_export[col] = pd.to_datetime(table_to_export[col], errors="coerce").dt.strftime("%d/%m/%Y")
+    csv_download(table_to_export, "omni_melhorias.csv", "⇩ Exportar melhorias filtradas em CSV")
 
 
 # Desenha o painel de Incidentes
 def render_incidents(frame: pd.DataFrame) -> None:
     st.markdown('<div class="section-label">Central de incidentes</div>', unsafe_allow_html=True)
-    st.caption("Acompanhamento e volumetria de falhas e interrupções sistêmicas relatadas no OMNI Sesi.")
     total = len(frame)
     closed = int(frame["Estado"].astype(str).str.casefold().isin(["encerrado(a)", "encerrado", "closed", "resolvido(a)", "resolvido", "cancelado(a)", "cancelado"]).sum())
     opened = total - closed
     
-    # Cards de estatísticas
-    insights = st.columns(4)
-    if total and frame["Aberto(a)"].notna().any():
-        daily = frame.dropna(subset=["Aberto(a)"]).copy()
-        daily["Data"] = daily["Aberto(a)"].dt.date
-        counts = daily["Data"].value_counts()
-        peak_day, peak_count = counts.idxmax(), int(counts.max())
-        quiet_day, quiet_count = counts.idxmin(), int(counts.min())
-        weeks = max(daily["Data"].nunique() / 7, 1)
-        months = max(daily["Data"].nunique() / 30, 1)
-        insight_values = [
-            ("MAIOR PICO DIÁRIO", f"{peak_count} incidentes em {peak_day.strftime('%d/%m/%Y')}", "#f59e0b"),
-            ("MENOR VOLUME ATIVO", f"{quiet_count} incidentes em {quiet_day.strftime('%d/%m/%Y')}", "#10b981"),
-            ("MÉDIA SEMANAL", f"Aprox. {round(total / weeks):.0f} / semana", "#3b82f6"),
-            ("MÉDIA MENSAL", f"Aprox. {round(total / months):.0f} / mês", "#8b5cf6"),
-        ]
-        for column, (title, text, color) in zip(insights, insight_values):
-            column.markdown(f'<div style="border:1px solid {color}55;background:{color}12;border-radius:.8rem;padding:.75rem;height:100%"><div style="color:{color};font-size:.68rem;font-weight:700;letter-spacing:.08em">{title}</div><div style="font-size:.82rem;margin-top:.45rem">{text}</div></div>', unsafe_allow_html=True)
-            
-    st.markdown('<div class="incident-spacer"></div>', unsafe_allow_html=True)
     kpi = st.columns(3)
     kpi[0].metric("Volume total", format_number(total))
     kpi[1].metric("Resolvidos / Encerrados", format_number(closed))
@@ -610,58 +651,35 @@ def render_incidents(frame: pd.DataFrame) -> None:
         st.info("Nenhum incidente corresponde aos filtros selecionados.")
         return
 
-    # Gráfico de volume diário
     timeline = frame.dropna(subset=["Aberto(a)"]).copy()
     timeline["Data"] = timeline["Aberto(a)"].dt.normalize()
-    first_day = timeline["Data"].min()
-    last_day = timeline["Data"].max()
-    daily_counts = timeline.groupby("Data").size().rename("Incidentes").reset_index()
-    daily_counts = daily_counts.sort_values("Data").reset_index(drop=True)
+    daily_counts = timeline.groupby("Data").size().rename("Incidentes").reset_index().sort_values("Data").reset_index(drop=True)
     daily_counts["Rótulo"] = daily_counts["Incidentes"].astype(int).astype(str)
     
-    tick_step = max(1, len(daily_counts) // 9)
-    tick_dates = daily_counts.loc[::tick_step, "Data"].tolist()
-    if daily_counts["Data"].iloc[-1] not in tick_dates:
-        tick_dates.append(daily_counts["Data"].iloc[-1])
-        
-    title = "Volume diário de incidentes"
-    st.markdown(f'<div class="incident-caption">{format_date(first_day)} até {format_date(last_day)}</div>', unsafe_allow_html=True)
-    
-    bar_chart = px.bar(daily_counts, x="Data", y="Incidentes", title=title, text="Rótulo", color_discrete_sequence=["#3b82f6"])
-    bar_chart.update_traces(
-        texttemplate="%{text}",
-        textposition="outside",
-        textfont_size=12,
-        cliponaxis=False,
-        hovertemplate="Data: %{x|%d/%m/%Y}<br>Incidentes: %{y:.0f}<extra></extra>",
-    )
-    bar_chart.update_layout(height=430, bargap=0.25)
-    bar_chart.update_xaxes(title=None, tickvals=tick_dates, tickformat="%d/%m/%Y", tickangle=-35, tickfont=dict(size=10), showgrid=False)
-    bar_chart.update_yaxes(title="Incidentes", dtick=5, tickfont=dict(size=11), gridcolor="rgba(148,163,184,.16)")
+    bar_chart = px.bar(daily_counts, x="Data", y="Incidentes", title="Volume diário de incidentes", text="Rótulo", color_discrete_sequence=["#3b82f6"])
+    bar_chart.update_traces(texttemplate="%{text}", textposition="outside", cliponaxis=False)
     st.plotly_chart(chart_figure(bar_chart), use_container_width=True)
 
-    # Tabela detalhada de incidentes
     st.markdown('<div class="section-label">Fila detalhada</div>', unsafe_allow_html=True)
     table = frame[INCIDENT_COLUMNS].sort_values("Atualizado em", ascending=False).copy()
-    for column in ["Aberto(a)", "Atualizado em"]:
-        table[column] = table[column].dt.strftime("%d/%m/%Y %H:%M")
-    csv_download(table, "omni_incidentes.csv", "⇩ Exportar incidentes")
+    for col in ["Aberto(a)", "Atualizado em"]:
+        table[col] = table[col].dt.strftime("%d/%m/%Y %H:%M")
+    csv_download(table, "omni_incidentes.csv", "⇩ Exportar incidentes em CSV")
     st.dataframe(table, hide_index=True, use_container_width=True, height=420)
 
 
-# Função de entrada
+# Função Principal
 def main() -> None:
     inject_styles()
     improvements, incidents, updates, errors = prepare_data()
     
-    # Cabeçalho da aplicação
-    st.markdown('<div class="hero"><div class="eyebrow">OMNI / Acompanhamento</div><h1>Painel de acompanhamento de atividades OMNI Sesi</h1><p>Visão executiva do portfólio de melhorias e da operação de incidentes, com dados atualizados a partir das fontes corporativas.</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero"><div class="eyebrow">OMNI / Acompanhamento</div><h1>Painel de acompanhamento de atividades OMNI Sesi</h1><p>Visão executiva do portfólio de melhorias e da operação de incidentes com fontes atualizadas.</p></div>', unsafe_allow_html=True)
     
     for error in errors:
         st.warning(error)
         
     section = st.radio("Seção", ["Melhorias", "Incidentes"], horizontal=True, label_visibility="collapsed", key="active_section")
-    filtered_improvements, filtered_incidents, filtered_updates, _, _ = render_sidebar(improvements, incidents, updates, section)
+    filtered_improvements, filtered_incidents, filtered_updates = render_sidebar(improvements, incidents, updates, section)
     
     if section == "Melhorias":
         render_improvements(filtered_improvements)
