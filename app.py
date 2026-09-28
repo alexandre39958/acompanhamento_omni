@@ -75,7 +75,6 @@ INCIDENT_COLUMNS = [
     "Atualizado em",
 ]
 
-
 # Injeção dos estilos CSS para o Kanban e ajuste de exibição do cabeçalho
 def inject_styles() -> None:
     st.markdown(
@@ -94,21 +93,39 @@ def inject_styles() -> None:
             color: var(--text-color) !important;
         }
 
-        /* Oculta apenas os menus/deploy mantendo o botão de reabrir a sidebar funcional */
-        #MainMenu, [data-testid="stAppDeployButton"] {
+        /* 1. Oculta o menu, botão de deploy e a barra superior (Fork/GitHub) */
+        #MainMenu, 
+        [data-testid="stAppDeployButton"], 
+        [data-testid="stToolbar"] {
             display: none !important;
+            visibility: hidden !important;
         }
+
+        /* 2. Mantém o cabeçalho invisível mas não quebra a seta da sidebar */
         [data-testid="stHeader"] {
             background-color: transparent !important;
             z-index: 100 !important;
         }
 
-        footer, [data-testid="stFooter"], [data-testid="stStatusWidget"], .stAppBadge, div[class*="viewerBadge"] {
+        /* 3. Aniquila o rodapé e TODOS os ícones do canto inferior direito (Perfil, Logo, Status) */
+        footer, 
+        [data-testid="stFooter"], 
+        [data-testid="stStatusWidget"], 
+        [data-testid="stAppCreatorBadge"], 
+        [data-testid="stAppViewerBadge"],
+        .stAppBadge, 
+        div[class*="viewerBadge"],
+        #creatorIndicator,
+        #viewerBadge {
             display: none !important;
             visibility: hidden !important;
+            opacity: 0 !important;
             height: 0 !important;
+            width: 0 !important;
+            pointer-events: none !important;
         }
 
+        /* Ajustes de layout principal e sidebar */
         [data-testid="stMainBlockContainer"] { 
             max-width: 1550px; 
             padding-top: 1.5rem !important; 
@@ -197,7 +214,7 @@ def inject_styles() -> None:
             font-size: 0.75rem;
             opacity: 0.75;
             display: flex;
-            justify-content: space-between;
+            justify-content: flex-end;
             margin-top: 0.4rem;
             padding-top: 0.35rem;
             border-top: 1px dashed rgba(128,128,128,0.2);
