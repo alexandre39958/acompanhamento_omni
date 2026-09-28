@@ -74,54 +74,131 @@ def inject_styles() -> None:
         """
         <style>
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
-        :root { --ink:#f8fafc; --muted:#94a3b8; --slate-950:#020617; --slate-900:#0f172a; --slate-850:#151f32; --blue:#3b82f6; --green:#10b981; --red:#ef4444; --yellow:#f59e0b; --purple:#8b5cf6; --line:rgba(255,255,255,.09); }
-        html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; color: var(--ink); }
-        body { background: var(--slate-950); }
-        .stApp { background: radial-gradient(circle at 0% 0%, rgba(59,130,246,.15), transparent 34rem), radial-gradient(circle at 100% 100%, rgba(139,92,246,.1), transparent 32rem), var(--slate-950); color: #f8fafc; }
-        [data-testid="stAppViewContainer"] { background: transparent; }
-        [data-testid="stHeader"] { background: rgba(2,6,23,.72); }
+
+        /* Fontes Globais */
+        html, body, [class*="css"] {
+            font-family: 'DM Sans', sans-serif;
+            color: var(--text-color);
+        }
+
+        h1, h2, h3 {
+            font-family: 'Space Grotesk', sans-serif !important;
+            letter-spacing: 0 !important;
+            color: var(--text-color) !important;
+        }
+
+        /* Ocultar menus e ajustar container */
         #MainMenu { visibility: hidden; }
         footer { visibility: hidden !important; }
         [data-testid="stMainBlockContainer"] { max-width: 1450px; padding-top: 2rem; }
-        h1, h2, h3 { font-family: 'Space Grotesk', sans-serif !important; letter-spacing: 0 !important; }
-        [data-testid="stSidebar"] { background: linear-gradient(180deg, #0b1222, #020617); border-right: 1px solid var(--line); }
-        [data-testid="stSidebar"] * { color: #e2e8f0 !important; }
-        [data-testid="stSidebar"] .stMultiSelect div[data-baseweb="select"], [data-testid="stSidebar"] input { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12); }
-        .hero { padding: 1.4rem 1.5rem 1.35rem; border: 1px solid var(--line); border-radius: 1rem; margin-bottom: 1.2rem; background: linear-gradient(110deg, rgba(255,255,255,.075), rgba(255,255,255,.025)); box-shadow: 0 8px 32px rgba(0,0,0,.3); }
-        .eyebrow { color: #60a5fa; text-transform: uppercase; font-size: .72rem; font-weight: 700; letter-spacing: .12em; }
-        .hero h1 { font-size: clamp(2rem, 4vw, 3.55rem); line-height: 1; margin: .28rem 0 .5rem; }
-        .hero p { color: var(--muted); margin: 0; max-width: 760px; font-size: 1.02rem; }
-        [data-testid="stMetric"] { background: linear-gradient(145deg, rgba(255,255,255,.075), rgba(255,255,255,.025)); border: 1px solid var(--line); padding: 1rem; border-radius: 1rem; box-shadow: 0 8px 32px rgba(0,0,0,.25); }
-        [data-testid="stMetricLabel"] { color: var(--muted); }
-        [data-testid="stMetricValue"] { font-family: 'Space Grotesk', sans-serif; color: var(--ink); }
-        [data-testid="stMetricDelta"] { color: #60a5fa !important; }
-        .section-label { color: #60a5fa; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; margin: 1.5rem 0 .4rem; }
-        .status-note { color: var(--muted); font-size: .85rem; }
-        div[data-testid="stDataFrame"] { border: 1px solid var(--line); border-radius: 1rem; overflow: hidden; }
-        button[data-baseweb="tab"] { font-weight: 600; color: #94a3b8; }
-        button[data-baseweb="tab"][aria-selected="true"] { color: #60a5fa; }
+
+        /* Sidebar com cores adaptáveis */
+        [data-testid="stSidebar"] {
+            border-right: 1px solid rgba(128, 128, 128, 0.2);
+        }
+        [data-testid="stSidebar"] .stMultiSelect div[data-baseweb="select"], 
+        [data-testid="stSidebar"] input {
+            background: var(--secondary-background-color);
+            border-color: rgba(128, 128, 128, 0.3);
+        }
+
+        /* Card Hero / Cabeçalho */
+        .hero {
+            padding: 1.4rem 1.5rem 1.35rem;
+            border: 1px solid rgba(128, 128, 128, 0.2);
+            border-radius: 1rem;
+            margin-bottom: 1.2rem;
+            background: var(--secondary-background-color);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+        }
+        .eyebrow {
+            color: var(--primary-color);
+            text-transform: uppercase;
+            font-size: .75rem;
+            font-weight: 700;
+            letter-spacing: .12em;
+        }
+        .hero h1 {
+            font-size: clamp(2rem, 4vw, 3.55rem);
+            line-height: 1;
+            margin: .28rem 0 .5rem;
+        }
+        .hero p {
+            opacity: 0.8;
+            margin: 0;
+            max-width: 760px;
+            font-size: 1.05rem;
+        }
+
+        /* Cards de Métricas */
+        [data-testid="stMetric"] {
+            background: var(--secondary-background-color);
+            border: 1px solid rgba(128, 128, 128, 0.2);
+            padding: 1rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+        }
+        [data-testid="stMetricLabel"] {
+            opacity: 0.8;
+            font-weight: 500;
+        }
+        [data-testid="stMetricValue"] {
+            font-family: 'Space Grotesk', sans-serif;
+            color: var(--text-color);
+        }
+
+        /* Rótulos e Subtítulos */
+        .section-label {
+            color: var(--primary-color);
+            font-size: .8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .1em;
+            margin: 1.5rem 0 .4rem;
+        }
+
+        /* Tabelas / DataFrames */
+        div[data-testid="stDataFrame"] {
+            border: 1px solid rgba(128, 128, 128, 0.2);
+            border-radius: 1rem;
+            overflow: hidden;
+            background: var(--secondary-background-color);
+        }
+
+        /* Tabs e Radios */
+        button[data-baseweb="tab"] { font-weight: 600; }
         div[role="radiogroup"] { gap: .45rem; }
-        div[role="radiogroup"] label { background: rgba(255,255,255,.045); border: 1px solid var(--line); border-radius: .7rem; padding: .35rem .8rem; }
-        div[role="radiogroup"] label:has(input:checked) { background: rgba(59,130,246,.18); border-color: rgba(59,130,246,.65); }
-        .incident-spacer { height: 1.25rem; }
-        .incident-caption { color: #94a3b8; font-size: .78rem; margin: .1rem 0 .45rem; }
-        div[data-testid="stAlert"] { background: rgba(245,158,11,.1); border-color: rgba(245,158,11,.35); }
-        div[data-testid="stPlotlyChart"] { background: rgba(255,255,255,.035); border: 1px solid var(--line); border-radius: 1rem; padding: .25rem; }
+        div[role="radiogroup"] label {
+            background: var(--secondary-background-color);
+            border: 1px solid rgba(128, 128, 128, 0.2);
+            border-radius: .7rem;
+            padding: .35rem .8rem;
+        }
+        div[role="radiogroup"] label:has(input:checked) {
+            background: rgba(59, 130, 246, 0.15);
+            border-color: var(--primary-color);
+        }
+
+        /* Gráficos Plotly Container */
+        div[data-testid="stPlotlyChart"] {
+            background: var(--secondary-background-color);
+            border: 1px solid rgba(128, 128, 128, 0.2);
+            border-radius: 1rem;
+            padding: .5rem;
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
-    px.defaults.template = "plotly_dark"
+    # px.defaults.template = "plotly_dark"
 
 
 def chart_figure(figure):
     figure.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font_color="#cbd5e1",
-        title_font_color="#f8fafc",
         margin=dict(l=28, r=28, t=56, b=28),
-        hoverlabel=dict(bgcolor="#0f172a", bordercolor="#3b82f6", font_size=13, font_color="#f8fafc"),
+        hoverlabel=dict(font_size=13),
     )
     return figure
 
