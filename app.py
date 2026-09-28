@@ -54,13 +54,12 @@ UPDATES_SOURCE = setting(
 )
 CACHE_TTL = int(os.getenv("OMNI_CACHE_TTL_SECONDS", "300"))
 
-# Mapeamento de colunas principais para exibição nas tabelas
+# Mapeamento de colunas principais para exibição nas tabelas (sem Sprint)
 IMPROVEMENT_COLUMNS = [
     "Categoria",
     "Melhoria",
     "Descrição",
     "Prioridade",
-    "Sprint",
     "Início",
     "Fim",
     "Status",
@@ -77,7 +76,7 @@ INCIDENT_COLUMNS = [
 ]
 
 
-# Injeção dos estilos CSS (interface, modo escuro/claro e remoção de marcas d'água)
+# Injeção dos estilos CSS para remoção completa de elementos da plataforma
 def inject_styles() -> None:
     st.markdown(
         """
@@ -96,41 +95,43 @@ def inject_styles() -> None:
         }
 
         /* -------------------------------------------------------------
-           1. MENU SUPERIOR: Mantém o menu "..." ativo para mudar o tema
+           1. OCULTAÇÃO COMPLETA DO CABEÇALHO (Git, Fork, Deploy, 3 Pontos)
         ------------------------------------------------------------- */
-        #MainMenu { visibility: visible !important; }
-        [data-testid="stHeader"] { 
-            background: transparent !important; 
-            display: flex !important;
+        header, 
+        [data-testid="stHeader"], 
+        #MainMenu, 
+        [data-testid="stAppDeployButton"], 
+        [data-testid="stHeaderActionElements"] {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
         }
-
-        /* Oculta apenas os botões indesejados no topo (Fork, Deploy, GitHub) */
-        [data-testid="stAppDeployButton"] { display: none !important; }
-        header a[href*="github.com"] { display: none !important; }
-        header button[title*="Fork"] { display: none !important; }
 
         /* -------------------------------------------------------------
-           2. RODAPÉ: Oculta o perfil e o selo "Hosted with Streamlit"
+           2. OCULTAÇÃO COMPLETA DO RODAPÉ E BADGES (Canto inferior direito)
         ------------------------------------------------------------- */
-        footer { display: none !important; visibility: hidden !important; height: 0 !important; }
-        [data-testid="stFooter"] { display: none !important; }
-        .stAppBadge { display: none !important; }
-        div[class*="viewerBadge"] { display: none !important; }
-        a[class*="viewerBadge"] { display: none !important; }
-        div[class*="ProfileButton"] { display: none !important; }
-        div[class*="styles_viewerBadge"] { display: none !important; }
-        div[class*="stAppViewerBadge"] { display: none !important; }
-        .viewerBadge_container__1QSob { display: none !important; }
-        
-        /* Oculta o widget flutuante no canto inferior direito */
-        div[data-testid="stStatusWidget"] { display: none !important; }
-
-        [data-testid="stMainBlockContainer"] { 
-            max-width: 1450px; 
-            padding-top: 2.2rem !important; 
+        footer, 
+        [data-testid="stFooter"], 
+        [data-testid="stStatusWidget"],
+        .stAppBadge,
+        div[class*="viewerBadge"],
+        a[class*="viewerBadge"],
+        div[class*="ProfileButton"],
+        div[class*="styles_viewerBadge"],
+        div[class*="stAppViewerBadge"],
+        .viewerBadge_container__1QSob {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
         }
 
-        /* Ajuste visual da barra lateral */
+        /* Ajuste de espaçamento superior */
+        [data-testid="stMainBlockContainer"] { 
+            max-width: 1450px; 
+            padding-top: 1.5rem !important; 
+        }
+
+        /* Barra lateral */
         [data-testid="stSidebar"] {
             border-right: 1px solid rgba(128, 128, 128, 0.2);
         }
@@ -168,7 +169,7 @@ def inject_styles() -> None:
             font-size: 1.05rem;
         }
 
-        /* Cartões de métricas kpi */
+        /* Cartões de métricas KPI */
         [data-testid="stMetric"] {
             background: var(--secondary-background-color);
             border: 1px solid rgba(128, 128, 128, 0.2);
@@ -194,7 +195,7 @@ def inject_styles() -> None:
             margin: 1.5rem 0 .4rem;
         }
 
-        /* Tabelas e botões de filtro */
+        /* Tabelas e seletores */
         div[data-testid="stDataFrame"] {
             border: 1px solid rgba(128, 128, 128, 0.2);
             border-radius: 1rem;
@@ -229,7 +230,7 @@ def inject_styles() -> None:
     )
 
 
-# Aplica transparência de fundo aos gráficos do Plotly
+# Aplica transparência aos gráficos Plotly
 def chart_figure(figure):
     figure.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
@@ -240,7 +241,7 @@ def chart_figure(figure):
     return figure
 
 
-# Funções utilitárias de formatação
+# Utilitários de formatação
 def format_number(value: int | float) -> str:
     return f"{value:,.0f}".replace(",", ".")
 
@@ -249,13 +250,13 @@ def format_date(value: object) -> str:
     return pd.Timestamp(value).strftime("%d/%m/%Y")
 
 
-# Remove acentos e caracteres especiais para comparação flexível
+# Normalização de strings para buscas e comparações
 def canonical(value: object) -> str:
     text = unicodedata.normalize("NFKD", str(value)).encode("ascii", "ignore").decode("ascii")
     return re.sub(r"[^a-z0-9]+", "", text.lower())
 
 
-# Mapeia valores brutos de status para nomes padronizados
+# Mapeia valores brutos de status
 def normalize_improvement_status(value: object) -> str:
     if pd.isna(value):
         return "Não informado"
@@ -273,7 +274,7 @@ def normalize_improvement_status(value: object) -> str:
     return str(value).strip()
 
 
-# Converte strings para datas válidas em formato pandas
+# Converte strings para datas pandas
 def parse_improvement_date(value: object) -> pd.Timestamp:
     if pd.isna(value) or not str(value).strip():
         return pd.NaT
@@ -283,7 +284,7 @@ def parse_improvement_date(value: object) -> pd.Timestamp:
     return pd.to_datetime(text, errors="coerce", dayfirst=True)
 
 
-# Localiza colunas no dataframe independentemente da caixa ou acentuação
+# Localiza colunas no dataframe
 def resolve_column(columns: Iterable[object], aliases: Iterable[str]) -> str | None:
     by_key = {canonical(column): str(column) for column in columns}
     for alias in aliases:
@@ -292,7 +293,7 @@ def resolve_column(columns: Iterable[object], aliases: Iterable[str]) -> str | N
     return None
 
 
-# Renomeia colunas para o padrão esperado pela aplicação
+# Renomeia colunas para o padrão
 def normalize_columns(frame: pd.DataFrame, schema: dict[str, list[str]]) -> pd.DataFrame:
     renamed: dict[str, str] = {}
     for target, aliases in schema.items():
@@ -306,7 +307,7 @@ def normalize_columns(frame: pd.DataFrame, schema: dict[str, list[str]]) -> pd.D
     return result
 
 
-# Formata o link para download direto se for uma URL do SharePoint
+# Formata URL do SharePoint para download direto
 def downloadable_url(source: str) -> str:
     if "sharepoint.com/" not in source.lower():
         return source
@@ -316,7 +317,7 @@ def downloadable_url(source: str) -> str:
     return urlunparse(parsed._replace(query=urlencode(query)))
 
 
-# Carrega e memoriza (cache) o conteúdo das fontes de dados externas
+# Carrega e memoriza (cache) os dados externos
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def load_source(source: str, source_name: str) -> tuple[pd.DataFrame, str | None]:
     try:
@@ -346,7 +347,7 @@ def load_source(source: str, source_name: str) -> tuple[pd.DataFrame, str | None
         return pd.DataFrame(), f"Não foi possível carregar {source_name}: {exc}"
 
 
-# Processa e padroniza os dados de Melhorias, Incidentes e Atualizações
+# Processa e prepara os dados (sem referência a Sprint)
 def prepare_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, list[str]]:
     improvements, improvement_error = load_source(IMPROVEMENTS_SOURCE, "melhorias")
     incidents, incident_error = load_source(INCIDENTS_SOURCE, "incidentes")
@@ -356,8 +357,8 @@ def prepare_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, list[str]]
         improvements,
         {
             "Categoria": ["category"], "Melhoria": ["improvement", "titulo"], "Descrição": ["description"], "Prioridade": ["priority"],
-            "Sprint": ["sprint", "ciclo", "iteracao"], "Início": ["inicio", "start", "data inicio"],
-            "Fim": ["fim", "end", "data fim", "termino"], "Status": ["status", "estado"],
+            "Início": ["inicio", "start", "data inicio"], "Fim": ["fim", "end", "data fim", "termino"],
+            "Status": ["status", "estado"],
             "Profissional alocado": ["profissional alocado", "responsavel", "responsável", "analista", "owner", "atribuido a", "attributed to"],
         },
     )
@@ -389,42 +390,39 @@ def prepare_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, list[str]]
     
     improvements["Início"] = improvements["Início"].map(parse_improvement_date)
     improvements["Fim"] = improvements["Fim"].map(parse_improvement_date)
-    if improvements["Sprint"].astype(str).str.strip().eq("").all() and not improvements.empty:
-        improvements["Sprint"] = "Próximas entregas"
     improvements["Status"] = improvements["Status"].map(normalize_improvement_status)
     
     return improvements.fillna(""), incidents.fillna(""), updates.fillna(""), [error for error in [improvement_error, incident_error, updates_error] if error]
 
 
-# Obtenção de opções únicas para os seletores
+# Obtenção de opções para seletores
 def options(frame: pd.DataFrame, column: str) -> list[str]:
     return sorted(value for value in frame[column].astype(str).unique() if value.strip())
 
 
-# Criação de um filtro multiselect genérico
+# Filtro multiselect
 def select_filter(label: str, values: list[str], key: str) -> list[str]:
     return st.multiselect(label, values, default=[], key=key, placeholder="Todos")
 
 
-# Aplica as escolhas dos filtros à tabela
+# Aplica filtros
 def apply_values(frame: pd.DataFrame, column: str, selected: list[str]) -> pd.DataFrame:
     return frame if not selected else frame[frame[column].astype(str).isin(selected)]
 
 
-# Botão de exportação para ficheiro CSV
+# Botão de exportação CSV
 def csv_download(frame: pd.DataFrame, filename: str, label: str) -> None:
     payload = frame.to_csv(index=False).encode("utf-8-sig")
     st.download_button(label, data=payload, file_name=filename, mime="text/csv", use_container_width=False)
 
 
-# Renderização da barra lateral e aplicação de filtros
+# Barra lateral de filtros (sem o filtro de Sprint)
 def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates: pd.DataFrame, section: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str, tuple[date, date]]:
     with st.sidebar:
         st.markdown("## OMNI\n**Governança operacional**")
         st.caption(f"Filtros de {section.lower()}")
         improvement_categories: list[str] = []
         improvement_priorities: list[str] = []
-        improvement_sprints: list[str] = []
         improvement_search = ""
         incident_categories: list[str] = []
         incident_priorities: list[str] = []
@@ -438,7 +436,6 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
         if section == "Melhorias":
             improvement_categories = select_filter("Categoria", options(improvements, "Categoria"), "improvement_category")
             improvement_priorities = select_filter("Prioridade", options(improvements, "Prioridade"), "improvement_priority")
-            improvement_sprints = select_filter("Sprint", options(improvements, "Sprint"), "improvement_sprint")
             improvement_search = st.text_input("Busca textual", placeholder="Melhoria ou descrição", key="improvement_search")
             valid_dates = improvements["Início"].dropna()
             min_date = valid_dates.min().date() if not valid_dates.empty else date.today() - timedelta(days=30)
@@ -461,11 +458,10 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
         st.divider()
         st.caption(f"Atualização automática: a cada {CACHE_TTL // 60 or 1} min")
 
-    # Aplicação dos filtros ao conjunto de Melhorias
+    # Aplicação dos filtros às Melhorias
     filtered_improvements = improvements.copy()
     filtered_improvements = apply_values(filtered_improvements, "Categoria", improvement_categories)
     filtered_improvements = apply_values(filtered_improvements, "Prioridade", improvement_priorities)
-    filtered_improvements = apply_values(filtered_improvements, "Sprint", improvement_sprints)
     if improvement_search:
         query = improvement_search.casefold()
         searchable = filtered_improvements["Melhoria"].astype(str) + " " + filtered_improvements["Descrição"].astype(str)
@@ -473,7 +469,7 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
     if len(date_range) == 2 and section == "Melhorias":
         filtered_improvements = filtered_improvements[filtered_improvements["Início"].notna() & filtered_improvements["Início"].dt.date.between(date_range[0], date_range[1])]
     
-    # Aplicação dos filtros ao conjunto de Incidentes
+    # Aplicação dos filtros aos Incidentes
     filtered_incidents = incidents.copy()
     for column, selected in [("Categoria", incident_categories), ("Prioridade", incident_priorities), ("Estado", incident_states), ("Atribuição a", incident_assignees), ("Grupo de atribuição", incident_groups)]:
         filtered_incidents = apply_values(filtered_incidents, column, selected)
@@ -491,7 +487,7 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
     return filtered_improvements, filtered_incidents, filtered_updates, improvement_search, date_range
 
 
-# Desenha o painel e os gráficos da secção de Melhorias
+# Desenha o painel de Melhorias reorganizado
 def render_improvements(frame: pd.DataFrame) -> None:
     st.markdown('<div class="section-label">Resumo das melhorias</div>', unsafe_allow_html=True)
     start_values = frame["Início"].dropna()
@@ -525,39 +521,27 @@ def render_improvements(frame: pd.DataFrame) -> None:
     status_order = ["Concluída", "Em desenvolvimento", "Em validação", "Próximas entregas", "Não informado"]
     status_counts = pd.DataFrame({"Status": status_order, "Quantidade": [completed, developing, validation, upcoming, unreported]})
     
-    # Exibição das métricas no topo
+    # 1. Cards de indicadores executivos
     overview = st.columns(5)
     overview[0].metric("Total de melhorias", format_number(total))
     for column, label, value in zip(overview[1:], ["Concluídas", "Em desenvolvimento", "Em validação", "Próximas entregas"], [completed, developing, validation, upcoming]):
         column.metric(label, format_number(value))
         
+    # 2. Gráfico de acompanhamento por status posicionado diretamente abaixo dos cards
     st.markdown('<div class="section-label">Acompanhamento por status</div>', unsafe_allow_html=True)
-    
-    # Gráfico de barras de status
     status_chart = px.bar(
         status_counts,
         x="Status",
         y="Quantidade",
         text="Quantidade",
-        title="Distribuição das melhorias",
+        title="Distribuição das melhorias por status",
         color="Status",
         color_discrete_map={"Concluída": "#10b981", "Em desenvolvimento": "#3b82f6", "Em validação": "#8b5cf6", "Próximas entregas": "#f59e0b", "Não informado": "#64748b"},
     )
     status_chart.update_traces(texttemplate="%{y:.0f}", textposition="outside", textfont_size=11, cliponaxis=False)
     st.plotly_chart(chart_figure(status_chart), use_container_width=True)
 
-    # Acordeões com as listas separadas por status
-    st.markdown('<div class="section-label">Listagem por status</div>', unsafe_allow_html=True)
-    list_columns = ["Categoria", "Melhoria", "Prioridade", "Sprint", "Status"]
-    for status in status_order:
-        status_frame = frame.loc[frame["Status"] == status, [c for c in list_columns if c in frame.columns]].copy()
-        with st.expander(f"{status} ({format_number(len(status_frame))})", expanded=False):
-            if status_frame.empty:
-                st.caption("Nenhuma melhoria nesta categoria.")
-            else:
-                st.dataframe(status_frame, hide_index=True, use_container_width=True, height=min(280, 80 + len(status_frame) * 35))
-                
-    # Gráficos complementares em duas colunas
+    # 3. Gráficos de Categoria e Prioridade lado a lado
     left, right = st.columns(2)
     with left:
         category_data = frame["Categoria"].replace("", "Não informado").value_counts().rename_axis("Categoria").reset_index(name="Quantidade")
@@ -566,25 +550,29 @@ def render_improvements(frame: pd.DataFrame) -> None:
         priority_data = frame["Prioridade"].replace("", "Não informado").value_counts().rename_axis("Prioridade").reset_index(name="Quantidade")
         st.plotly_chart(chart_figure(px.bar(priority_data, x="Prioridade", y="Quantidade", title="Volume por prioridade", color="Prioridade", color_discrete_sequence=["#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6"])), use_container_width=True)
         
-    # Tabela detalhada completa e exportação em CSV
+    # 4. Tabela detalhada completa com filtro de status integrado
     st.markdown('<div class="section-label">Detalhamento</div>', unsafe_allow_html=True)
     detail_statuses = st.multiselect(
-        "Status",
+        "Filtrar por Status",
         options=sorted(frame["Status"].dropna().astype(str).unique().tolist()),
         default=[],
         key="detail_improvement_status",
-        placeholder="Todos",
+        placeholder="Todos os status",
     )
+    
+    filtered_table_frame = frame.copy()
     if detail_statuses:
-        frame = frame[frame["Status"].astype(str).isin(detail_statuses)].copy()
-    table = frame[IMPROVEMENT_COLUMNS].sort_values(["Sprint", "Início", "Prioridade", "Categoria"])
+        filtered_table_frame = filtered_table_frame[filtered_table_frame["Status"].astype(str).isin(detail_statuses)]
+        
+    table = filtered_table_frame[IMPROVEMENT_COLUMNS].sort_values(["Início", "Prioridade", "Categoria"])
     for column in ["Início", "Fim"]:
         table[column] = pd.to_datetime(table[column], errors="coerce").dt.strftime("%d/%m/%Y")
+        
     csv_download(table, "omni_melhorias.csv", "⇩ Exportar melhorias")
-    st.dataframe(table, hide_index=True, use_container_width=True, height=360)
+    st.dataframe(table, hide_index=True, use_container_width=True, height=380)
 
 
-# Desenha o painel e os gráficos da secção de Incidentes
+# Desenha o painel de Incidentes
 def render_incidents(frame: pd.DataFrame) -> None:
     st.markdown('<div class="section-label">Central de incidentes</div>', unsafe_allow_html=True)
     st.caption("Acompanhamento e volumetria de falhas e interrupções sistêmicas relatadas no OMNI Sesi.")
@@ -592,7 +580,7 @@ def render_incidents(frame: pd.DataFrame) -> None:
     closed = int(frame["Estado"].astype(str).str.casefold().isin(["encerrado(a)", "encerrado", "closed", "resolvido(a)", "resolvido", "cancelado(a)", "cancelado"]).sum())
     opened = total - closed
     
-    # Cartões de estatísticas rápidas/insights
+    # Cards de estatísticas
     insights = st.columns(4)
     if total and frame["Aberto(a)"].notna().any():
         daily = frame.dropna(subset=["Aberto(a)"]).copy()
@@ -622,7 +610,7 @@ def render_incidents(frame: pd.DataFrame) -> None:
         st.info("Nenhum incidente corresponde aos filtros selecionados.")
         return
 
-    # Gráfico de evolução temporária dos incidentes
+    # Gráfico de volume diário
     timeline = frame.dropna(subset=["Aberto(a)"]).copy()
     timeline["Data"] = timeline["Aberto(a)"].dt.normalize()
     first_day = timeline["Data"].min()
@@ -661,19 +649,17 @@ def render_incidents(frame: pd.DataFrame) -> None:
     st.dataframe(table, hide_index=True, use_container_width=True, height=420)
 
 
-# Função principal de arranque da aplicação
+# Função de entrada
 def main() -> None:
     inject_styles()
     improvements, incidents, updates, errors = prepare_data()
     
-    # Cabeçalho da aplicação (Hero)
+    # Cabeçalho da aplicação
     st.markdown('<div class="hero"><div class="eyebrow">OMNI / Acompanhamento</div><h1>Painel de acompanhamento de atividades OMNI Sesi</h1><p>Visão executiva do portfólio de melhorias e da operação de incidentes, com dados atualizados a partir das fontes corporativas.</p></div>', unsafe_allow_html=True)
     
-    # Exibição de avisos caso ocorra erro no carregamento dos dados
     for error in errors:
         st.warning(error)
         
-    # Navegação entre abas principais
     section = st.radio("Seção", ["Melhorias", "Incidentes"], horizontal=True, label_visibility="collapsed", key="active_section")
     filtered_improvements, filtered_incidents, filtered_updates, _, _ = render_sidebar(improvements, incidents, updates, section)
     
