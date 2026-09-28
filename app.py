@@ -451,15 +451,27 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
         query = improvement_search.casefold()
         searchable = filtered_improvements["Melhoria"].astype(str) + " " + filtered_improvements["Descrição"].astype(str)
         filtered_improvements = filtered_improvements[searchable.str.casefold().str.contains(query, na=False)]
+    
     if len(date_range) == 2 and section == "Melhorias":
-        filtered_improvements = filtered_improvements[filtered_improvements["Início"].notna() & filtered_improvements["Início"].dt.date.between(date_range[0], date_range[1])]
+        start_ts = pd.Timestamp(date_range[0])
+        end_ts = pd.Timestamp(date_range[1]) + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1)
+        filtered_improvements = filtered_improvements[
+            filtered_improvements["Início"].notna() & 
+            filtered_improvements["Início"].between(start_ts, end_ts)
+        ]
     
     # Aplicando filtros nos Incidentes
     filtered_incidents = incidents.copy()
     for col, sel in [("Categoria", incident_categories), ("Prioridade", incident_priorities), ("Estado", incident_states), ("Atribuição a", incident_assignees), ("Grupo de atribuição", incident_groups)]:
         filtered_incidents = apply_values(filtered_incidents, col, sel)
+        
     if len(date_range) == 2 and section == "Incidentes":
-        filtered_incidents = filtered_incidents[filtered_incidents["Atualizado em"].dt.date.between(date_range[0], date_range[1])]
+        start_ts = pd.Timestamp(date_range[0])
+        end_ts = pd.Timestamp(date_range[1]) + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1)
+        filtered_incidents = filtered_incidents[
+            filtered_incidents["Atualizado em"].notna() & 
+            filtered_incidents["Atualizado em"].between(start_ts, end_ts)
+        ]
     
     filtered_updates = apply_values(updates.copy(), "Mês", update_months)
     return filtered_improvements, filtered_incidents, filtered_updates
