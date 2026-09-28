@@ -16,7 +16,7 @@ import streamlit as st
 
 
 st.set_page_config(
-    page_title="OMNI | Governança operacional",
+    page_title="Painel de acompanhamento de atividades OMNI Sesi",
     page_icon="◈",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -52,21 +52,26 @@ UPDATES_SOURCE = setting(
 )
 CACHE_TTL = int(os.getenv("OMNI_CACHE_TTL_SECONDS", "300"))
 
-IMPROVEMENT_COLUMNS = ["Categoria", "Melhoria", "Descrição", "Prioridade", "Sprint", "Início", "Fim", "Status", "Profissional alocado"]
+IMPROVEMENT_COLUMNS = [
+    "Categoria",
+    "Melhoria",
+    "Descrição",
+    "Prioridade",
+    "Sprint",
+    "Início",
+    "Fim",
+    "Status",
+    "Profissional alocado",
+]
 INCIDENT_COLUMNS = [
     "Número",
     "Aberto(a)",
-    "Descrição resumida",
+    "Resumo",
     "Solicitante",
-    "Prioridade",
     "Estado",
-    "Categoria",
-    "Grupo de atribuição",
     "Atribuição a",
     "Atualizado em",
-    "Sistema",
 ]
-UPDATE_COLUMNS = ["PR", "Service Now", "Tema", "Serviços", "Observações", "Mês"]
 
 
 def inject_styles() -> None:
@@ -74,8 +79,7 @@ def inject_styles() -> None:
         """
         <style>
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
-
-        /* Fontes Globais */
+        
         html, body, [class*="css"] {
             font-family: 'DM Sans', sans-serif;
             color: var(--text-color);
@@ -87,12 +91,27 @@ def inject_styles() -> None:
             color: var(--text-color) !important;
         }
 
-        /* Ocultar menus e ajustar container */
-        #MainMenu { visibility: hidden; }
-        footer { visibility: hidden !important; }
-        [data-testid="stMainBlockContainer"] { max-width: 1450px; padding-top: 2rem; }
+        /* Oculta topo nativo, menu, toolbar e botão Fork */
+        #MainMenu { visibility: hidden !important; }
+        footer { display: none !important; visibility: hidden !important; }
+        header { display: none !important; visibility: hidden !important; }
+        [data-testid="stHeader"] { display: none !important; }
+        [data-testid="stToolbar"] { display: none !important; }
+        [data-testid="stDecoration"] { display: none !important; }
+        [data-testid="stStatusWidget"] { display: none !important; }
+        
+        /* Oculta o selo "Hosted with Streamlit" e perfil */
+        div[class*="viewerBadge"] { display: none !important; }
+        a[class*="viewerBadge"] { display: none !important; }
+        div[class*="ProfileButton"] { display: none !important; }
+        .viewerBadge_container__1QSob { display: none !important; }
 
-        /* Sidebar com cores adaptáveis */
+        [data-testid="stMainBlockContainer"] { 
+            max-width: 1450px; 
+            padding-top: 1.5rem !important; 
+        }
+
+        /* Sidebar adaptável */
         [data-testid="stSidebar"] {
             border-right: 1px solid rgba(128, 128, 128, 0.2);
         }
@@ -102,7 +121,7 @@ def inject_styles() -> None:
             border-color: rgba(128, 128, 128, 0.3);
         }
 
-        /* Card Hero / Cabeçalho */
+        /* Card Hero */
         .hero {
             padding: 1.4rem 1.5rem 1.35rem;
             border: 1px solid rgba(128, 128, 128, 0.2);
@@ -147,7 +166,6 @@ def inject_styles() -> None:
             color: var(--text-color);
         }
 
-        /* Rótulos e Subtítulos */
         .section-label {
             color: var(--primary-color);
             font-size: .8rem;
@@ -157,7 +175,6 @@ def inject_styles() -> None:
             margin: 1.5rem 0 .4rem;
         }
 
-        /* Tabelas / DataFrames */
         div[data-testid="stDataFrame"] {
             border: 1px solid rgba(128, 128, 128, 0.2);
             border-radius: 1rem;
@@ -165,7 +182,6 @@ def inject_styles() -> None:
             background: var(--secondary-background-color);
         }
 
-        /* Tabs e Radios */
         button[data-baseweb="tab"] { font-weight: 600; }
         div[role="radiogroup"] { gap: .45rem; }
         div[role="radiogroup"] label {
@@ -179,7 +195,8 @@ def inject_styles() -> None:
             border-color: var(--primary-color);
         }
 
-        /* Gráficos Plotly Container */
+        .incident-spacer { height: 1.25rem; }
+        .incident-caption { opacity: 0.8; font-size: .85rem; margin: .1rem 0 .45rem; }
         div[data-testid="stPlotlyChart"] {
             background: var(--secondary-background-color);
             border: 1px solid rgba(128, 128, 128, 0.2);
@@ -190,7 +207,6 @@ def inject_styles() -> None:
         """,
         unsafe_allow_html=True,
     )
-    # px.defaults.template = "plotly_dark"
 
 
 def chart_figure(figure):
@@ -207,34 +223,8 @@ def format_number(value: int | float) -> str:
     return f"{value:,.0f}".replace(",", ".")
 
 
-def rounded_percent(value: int, total: int) -> str:
-    return f"{round((value / total) * 100):.0f}%" if total else "0%"
-
-
 def format_date(value: object) -> str:
     return pd.Timestamp(value).strftime("%d/%m/%Y")
-
-
-def month_name(month: int) -> str:
-    return [
-        "janeiro", "fevereiro", "março", "abril", "maio", "junho",
-        "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
-    ][month - 1]
-
-
-def short_improvement_title(value: object) -> str:
-    title = re.sub(r"\s*\([^)]*\)", "", str(value)).strip()
-    replacements = {
-        "Agendamento em locais que não são Unidades do Sesi": "Agendamentos em locais não unidade SESI",
-        "Impedir o agendamento de mudança de risco para datas posteriores à data de movimentação": "Bloqueio de mudança de risco após movimentação",
-        "Unidades devem receber e-mails de novo agendamento": "E-mails para novos agendamentos",
-        "Opção de atender a consulta ocupacional por último": "Consulta ocupacional por último na fila",
-        "Otimizar fila de atendimento inteligente": "Otimização da fila inteligente",
-    }
-    if title in replacements:
-        return replacements[title]
-    words = title.split()
-    return title if len(words) <= 8 else f"{' '.join(words[:8])}..."
 
 
 def canonical(value: object) -> str:
@@ -344,7 +334,7 @@ def prepare_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, list[str]]
         incidents,
         {
             "Número": ["numero", "number", "ticket", "incidente"], "Aberto(a)": ["aberto", "opened", "data abertura"],
-            "Descrição resumida": ["descricao resumida", "short description", "descricao"], "Solicitante": ["requester"],
+            "Resumo": ["descricao resumida", "short description", "descricao", "resumo", "summary"], "Solicitante": ["requester"],
             "Prioridade": ["priority"], "Estado": ["state", "status"], "Categoria": ["category"],
             "Grupo de atribuição": ["assignment group", "grupo"], "Atribuição a": ["assigned to", "atribuido a", "analista"],
             "Atualizado em": ["updated", "updated at", "data atualizacao"], "Sistema": ["system", "sistema"],
@@ -367,7 +357,7 @@ def prepare_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, list[str]]
     improvements["Início"] = improvements["Início"].map(parse_improvement_date)
     improvements["Fim"] = improvements["Fim"].map(parse_improvement_date)
     if improvements["Sprint"].astype(str).str.strip().eq("").all() and not improvements.empty:
-        improvements["Sprint"] = "Backlog"
+        improvements["Sprint"] = "Próximas entregas"
     improvements["Status"] = improvements["Status"].map(normalize_improvement_status)
     return improvements.fillna(""), incidents.fillna(""), updates.fillna(""), [error for error in [improvement_error, incident_error, updates_error] if error]
 
@@ -417,7 +407,7 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
         elif section == "Incidentes":
             incident_categories = select_filter("Categoria", options(incidents, "Categoria"), "incident_category")
             incident_priorities = select_filter("Prioridade", options(incidents, "Prioridade"), "incident_priority")
-            incident_states = select_filter("Estado do chamado", options(incidents, "Estado"), "incident_state")
+            incident_states = select_filter("Estado do incidente", options(incidents, "Estado"), "incident_state")
             incident_assignees = select_filter("Atribuição", options(incidents, "Atribuição a"), "incident_assignee")
             incident_groups = select_filter("Grupo de atribuição", options(incidents, "Grupo de atribuição"), "incident_group")
             valid_dates = incidents["Atualizado em"].dropna()
@@ -426,7 +416,7 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
             date_range = st.date_input("Intervalo de atualização", value=(min_date, max_date), min_value=min_date, max_value=max_date, key="incident_date")
         else:
             update_months = select_filter("Mês", options(updates, "Mês"), "update_month")
-            update_search = st.text_input("Busca textual", placeholder="Tema, PR, chamado ou serviço", key="update_search")
+            update_search = st.text_input("Busca textual", placeholder="Tema, PR ou serviço", key="update_search")
         st.divider()
         st.caption(f"Atualização automática: a cada {CACHE_TTL // 60 or 1} min")
 
@@ -498,35 +488,11 @@ def render_improvements(frame: pd.DataFrame) -> None:
     )
     status_chart.update_traces(texttemplate="%{y:.0f}", textposition="outside", textfont_size=11, cliponaxis=False)
     st.plotly_chart(chart_figure(status_chart), use_container_width=True)
-    st.markdown('<div class="section-label">Planejamento por sprint</div>', unsafe_allow_html=True)
-    schedule = frame[
-        frame["Início"].notna()
-        & frame["Fim"].notna()
-        & frame["Início"].astype(str).str.strip().ne("")
-        & frame["Fim"].astype(str).str.strip().ne("")
-    ].copy()
-    if not schedule.empty:
-        schedule["Trabalho"] = schedule["Melhoria"].map(short_improvement_title)
-        schedule["Sprint"] = schedule["Sprint"].replace("", "Backlog")
-        gantt = px.timeline(
-            schedule,
-            x_start="Início",
-            x_end="Fim",
-            y="Trabalho",
-            color="Sprint",
-            hover_data=["Melhoria", "Categoria", "Prioridade", "Status"],
-            title="Roadmap de melhorias",
-            color_discrete_sequence=["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444"],
-        )
-        gantt.update_yaxes(autorange="reversed", title=None)
-        gantt.update_xaxes(title=None, showgrid=True, gridcolor="rgba(148,163,184,.12)", tickformat="%d/%m/%Y")
-        st.plotly_chart(chart_figure(gantt), use_container_width=True)
-    else:
-        st.info("Adicione Início e Fim à fonte de melhorias para visualizar o roadmap por sprint.")
+
     st.markdown('<div class="section-label">Listagem por status</div>', unsafe_allow_html=True)
     list_columns = ["Categoria", "Melhoria", "Prioridade", "Sprint", "Status"]
     for status in status_order:
-        status_frame = frame.loc[frame["Status"] == status, list_columns].copy()
+        status_frame = frame.loc[frame["Status"] == status, [c for c in list_columns if c in frame.columns]].copy()
         with st.expander(f"{status} ({format_number(len(status_frame))})", expanded=False):
             if status_frame.empty:
                 st.caption("Nenhuma melhoria nesta categoria.")
@@ -557,8 +523,8 @@ def render_improvements(frame: pd.DataFrame) -> None:
 
 
 def render_incidents(frame: pd.DataFrame) -> None:
-    st.markdown('<div class="section-label">Central de incidentes ITSM</div>', unsafe_allow_html=True)
-    st.caption(f"{len(frame):,} chamados no recorte atual".replace(",", "."))
+    st.markdown('<div class="section-label">Central de incidentes</div>', unsafe_allow_html=True)
+    st.caption("Acompanhamento e volumetria de falhas e interrupções sistêmicas relatadas no OMNI Sesi.")
     total = len(frame)
     closed = int(frame["Estado"].astype(str).str.casefold().isin(["encerrado(a)", "encerrado", "closed", "resolvido(a)", "resolvido", "cancelado(a)", "cancelado"]).sum())
     opened = total - closed
@@ -572,57 +538,51 @@ def render_incidents(frame: pd.DataFrame) -> None:
         weeks = max(daily["Data"].nunique() / 7, 1)
         months = max(daily["Data"].nunique() / 30, 1)
         insight_values = [
-            ("MAIOR PICO DIÁRIO", f"{peak_count} chamados em {peak_day.strftime('%d/%m/%Y')}", "#f59e0b"),
-            ("MENOR VOLUME ATIVO", f"{quiet_count} chamados em {quiet_day.strftime('%d/%m/%Y')}", "#10b981"),
+            ("MAIOR PICO DIÁRIO", f"{peak_count} incidentes em {peak_day.strftime('%d/%m/%Y')}", "#f59e0b"),
+            ("MENOR VOLUME ATIVO", f"{quiet_count} incidentes em {quiet_day.strftime('%d/%m/%Y')}", "#10b981"),
             ("MÉDIA SEMANAL", f"Aprox. {round(total / weeks):.0f} / semana", "#3b82f6"),
             ("MÉDIA MENSAL", f"Aprox. {round(total / months):.0f} / mês", "#8b5cf6"),
         ]
         for column, (title, text, color) in zip(insights, insight_values):
-            column.markdown(f'<div style="border:1px solid {color}55;background:{color}12;border-radius:.8rem;padding:.75rem;height:100%"><div style="color:{color};font-size:.68rem;font-weight:700;letter-spacing:.08em">{title}</div><div style="color:#e2e8f0;font-size:.82rem;margin-top:.45rem">{text}</div></div>', unsafe_allow_html=True)
+            column.markdown(f'<div style="border:1px solid {color}55;background:{color}12;border-radius:.8rem;padding:.75rem;height:100%"><div style="color:{color};font-size:.68rem;font-weight:700;letter-spacing:.08em">{title}</div><div style="font-size:.82rem;margin-top:.45rem">{text}</div></div>', unsafe_allow_html=True)
     st.markdown('<div class="incident-spacer"></div>', unsafe_allow_html=True)
     kpi = st.columns(3)
     kpi[0].metric("Volume total", format_number(total))
-    kpi[1].metric("Resolvidos / Encerrados", format_number(closed), delta=rounded_percent(closed, total))
-    kpi[2].metric("Abertos / Pendentes", format_number(opened), delta=rounded_percent(opened, total))
+    kpi[1].metric("Resolvidos / Encerrados", format_number(closed))
+    kpi[2].metric("Abertos / Pendentes", format_number(opened))
     st.markdown('<div class="incident-spacer"></div>', unsafe_allow_html=True)
     if frame.empty:
         st.info("Nenhum incidente corresponde aos filtros selecionados.")
         return
-    chart_a, chart_b = st.columns(2)
-    with chart_a:
-        timeline = frame.dropna(subset=["Aberto(a)"]).copy()
-        timeline["Data"] = timeline["Aberto(a)"].dt.normalize()
-        first_day = timeline["Data"].min()
-        last_day = timeline["Data"].max()
-        daily_counts = timeline.groupby("Data").size().rename("Chamados").reset_index()
-        daily_counts = daily_counts.sort_values("Data").reset_index(drop=True)
-        daily_counts["Rótulo"] = daily_counts["Chamados"].astype(int).astype(str)
-        tick_step = max(1, len(daily_counts) // 9)
-        tick_dates = daily_counts.loc[::tick_step, "Data"].tolist()
-        if daily_counts["Data"].iloc[-1] not in tick_dates:
-            tick_dates.append(daily_counts["Data"].iloc[-1])
-        title = "Aberturas por dia"
-        st.markdown(f'<div class="incident-caption">{format_date(first_day)} até {format_date(last_day)} · dias com chamados</div>', unsafe_allow_html=True)
-        bar_chart = px.bar(daily_counts, x="Data", y="Chamados", title=title, text="Rótulo", color_discrete_sequence=["#3b82f6"])
-        bar_chart.update_traces(
-            texttemplate="%{text}",
-            textposition="outside",
-            textfont_size=12,
-            cliponaxis=False,
-            hovertemplate="Data: %{x|%d/%m/%Y}<br>Chamados: %{y:.0f}<extra></extra>",
-        )
-        bar_chart.update_layout(height=430, bargap=0.25)
-        bar_chart.update_xaxes(title=None, tickvals=tick_dates, tickformat="%d/%m/%Y", tickangle=-35, tickfont=dict(size=10), showgrid=False)
-        bar_chart.update_yaxes(title="Chamados", dtick=5, tickfont=dict(size=11), gridcolor="rgba(148,163,184,.16)")
-        st.plotly_chart(chart_figure(bar_chart), use_container_width=True)
-    with chart_b:
-        state_data = frame["Estado"].replace("", "Não informado").value_counts().rename_axis("Estado").reset_index(name="Chamados")
-        pie_chart = px.pie(state_data, names="Estado", values="Chamados", hole=.58, title="Distribuição do status atual", color_discrete_sequence=["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6"])
-        pie_chart.update_traces(textinfo="percent", texttemplate="%{percent:.1%}", textfont_size=12, hovertemplate="Status: %{label}<br>Chamados: %{value:.0f}<br>Percentual: %{percent:.1%}<extra></extra>")
-        st.plotly_chart(chart_figure(pie_chart), use_container_width=True)
+
+    timeline = frame.dropna(subset=["Aberto(a)"]).copy()
+    timeline["Data"] = timeline["Aberto(a)"].dt.normalize()
+    first_day = timeline["Data"].min()
+    last_day = timeline["Data"].max()
+    daily_counts = timeline.groupby("Data").size().rename("Incidentes").reset_index()
+    daily_counts = daily_counts.sort_values("Data").reset_index(drop=True)
+    daily_counts["Rótulo"] = daily_counts["Incidentes"].astype(int).astype(str)
+    tick_step = max(1, len(daily_counts) // 9)
+    tick_dates = daily_counts.loc[::tick_step, "Data"].tolist()
+    if daily_counts["Data"].iloc[-1] not in tick_dates:
+        tick_dates.append(daily_counts["Data"].iloc[-1])
+    title = "Volume diário de incidentes"
+    st.markdown(f'<div class="incident-caption">{format_date(first_day)} até {format_date(last_day)}</div>', unsafe_allow_html=True)
+    bar_chart = px.bar(daily_counts, x="Data", y="Incidentes", title=title, text="Rótulo", color_discrete_sequence=["#3b82f6"])
+    bar_chart.update_traces(
+        texttemplate="%{text}",
+        textposition="outside",
+        textfont_size=12,
+        cliponaxis=False,
+        hovertemplate="Data: %{x|%d/%m/%Y}<br>Incidentes: %{y:.0f}<extra></extra>",
+    )
+    bar_chart.update_layout(height=430, bargap=0.25)
+    bar_chart.update_xaxes(title=None, tickvals=tick_dates, tickformat="%d/%m/%Y", tickangle=-35, tickfont=dict(size=10), showgrid=False)
+    bar_chart.update_yaxes(title="Incidentes", dtick=5, tickfont=dict(size=11), gridcolor="rgba(148,163,184,.16)")
+    st.plotly_chart(chart_figure(bar_chart), use_container_width=True)
+
     st.markdown('<div class="section-label">Fila detalhada</div>', unsafe_allow_html=True)
-    table_columns = [column for column in INCIDENT_COLUMNS if column != "Sistema"]
-    table = frame[table_columns].sort_values("Atualizado em", ascending=False).copy()
+    table = frame[INCIDENT_COLUMNS].sort_values("Atualizado em", ascending=False).copy()
     for column in ["Aberto(a)", "Atualizado em"]:
         table[column] = table[column].dt.strftime("%d/%m/%Y %H:%M")
     csv_download(table, "omni_incidentes.csv", "⇩ Exportar incidentes")
