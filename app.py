@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Iterable
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from urllib.request import Request, urlopen
+import streamlit.components.v1 as components
 
 import pandas as pd
 import plotly.express as px
@@ -20,6 +21,31 @@ st.set_page_config(
     page_icon="◈",
     layout="wide",
     initial_sidebar_state="expanded",
+)
+
+# Força a remoção de badges flutuantes e elementos do Streamlit via DOM
+components.html(
+    """
+    <script>
+        const removeElements = () => {
+            const doc = window.parent.document;
+            const selectors = [
+                '[data-testid="stStatusWidget"]',
+                '[data-testid="stAppCreatorBadge"]',
+                '[data-testid="stAppViewerBadge"]',
+                '.stAppBadge',
+                '#viewerBadge',
+                'footer',
+                'header'
+            ];
+            selectors.forEach(selector => {
+                doc.querySelectorAll(selector).forEach(el => el.remove());
+            });
+        };
+        setInterval(removeElements, 500);
+    </script>
+    """,
+    height=0,
 )
 
 # Diretórios base de trabalho
