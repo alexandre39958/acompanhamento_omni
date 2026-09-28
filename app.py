@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Iterable
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from urllib.request import Request, urlopen
-import streamlit.components.v1 as components
 
 import pandas as pd
 import plotly.express as px
@@ -21,31 +20,6 @@ st.set_page_config(
     page_icon="◈",
     layout="wide",
     initial_sidebar_state="expanded",
-)
-
-# Força a remoção de badges flutuantes e elementos do Streamlit via DOM
-components.html(
-    """
-    <script>
-        const removeElements = () => {
-            const doc = window.parent.document;
-            const selectors = [
-                '[data-testid="stStatusWidget"]',
-                '[data-testid="stAppCreatorBadge"]',
-                '[data-testid="stAppViewerBadge"]',
-                '.stAppBadge',
-                '#viewerBadge',
-                'footer',
-                'header'
-            ];
-            selectors.forEach(selector => {
-                doc.querySelectorAll(selector).forEach(el => el.remove());
-            });
-        };
-        setInterval(removeElements, 500);
-    </script>
-    """,
-    height=0,
 )
 
 # Diretórios base de trabalho
@@ -120,39 +94,21 @@ def inject_styles() -> None:
             color: var(--text-color) !important;
         }
 
-        /* 1. Oculta o menu, botão de deploy e a barra superior (Fork/GitHub) */
-        #MainMenu, 
-        [data-testid="stAppDeployButton"], 
-        [data-testid="stToolbar"] {
+        /* Oculta apenas os menus/deploy mantendo o botão de reabrir a sidebar funcional */
+        #MainMenu, [data-testid="stAppDeployButton"] {
             display: none !important;
-            visibility: hidden !important;
         }
-
-        /* 2. Mantém o cabeçalho invisível mas não quebra a seta da sidebar */
         [data-testid="stHeader"] {
             background-color: transparent !important;
             z-index: 100 !important;
         }
 
-        /* 3. Aniquila o rodapé e TODOS os ícones do canto inferior direito (Perfil, Logo, Status) */
-        footer, 
-        [data-testid="stFooter"], 
-        [data-testid="stStatusWidget"], 
-        [data-testid="stAppCreatorBadge"], 
-        [data-testid="stAppViewerBadge"],
-        .stAppBadge, 
-        div[class*="viewerBadge"],
-        #creatorIndicator,
-        #viewerBadge {
+        footer, [data-testid="stFooter"], [data-testid="stStatusWidget"], .stAppBadge, div[class*="viewerBadge"] {
             display: none !important;
             visibility: hidden !important;
-            opacity: 0 !important;
             height: 0 !important;
-            width: 0 !important;
-            pointer-events: none !important;
         }
 
-        /* Ajustes de layout principal e sidebar */
         [data-testid="stMainBlockContainer"] { 
             max-width: 1550px; 
             padding-top: 1.5rem !important; 
@@ -241,7 +197,7 @@ def inject_styles() -> None:
             font-size: 0.75rem;
             opacity: 0.75;
             display: flex;
-            justify-content: flex-end;
+            justify-content: space-between;
             margin-top: 0.4rem;
             padding-top: 0.35rem;
             border-top: 1px dashed rgba(128,128,128,0.2);
@@ -710,6 +666,7 @@ def render_incidents(frame: pd.DataFrame) -> None:
         table[col] = table[col].dt.strftime("%d/%m/%Y %H:%M")
     csv_download(table, "omni_incidentes.csv", "⇩ Exportar incidentes em CSV")
     st.dataframe(table, hide_index=True, use_container_width=True, height=420)
+
 
 # Função Principal
 def main() -> None:
