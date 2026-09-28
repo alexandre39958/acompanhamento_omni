@@ -107,7 +107,7 @@ def inject_styles() -> None:
             z-index: 100 !important;
         }
 
-        /* 3. Aniquila o rodapé e TODOS os ícones do canto inferior direito (Perfil, Logo, Status) */
+        /* 3. Aniquila o rodapé e TODOS os ícones do canto inferior direito */
         footer, 
         [data-testid="stFooter"], 
         [data-testid="stStatusWidget"], 
@@ -252,10 +252,10 @@ def canonical(value: object) -> str:
 
 def normalize_improvement_status(value: object) -> str:
     if pd.isna(value):
-        return "Não informado"
+        return "Próximas entregas"
     key = canonical(value)
     if not key:
-        return "Não informado"
+        return "Próximas entregas"
     if any(term in key for term in ["conclu", "finaliz", "encerr", "resolvid"]):
         return "Concluída"
     if any(term in key for term in ["desenvolv", "andamento", "execucao", "fazendo", "progresso"]):
@@ -264,7 +264,7 @@ def normalize_improvement_status(value: object) -> str:
         return "Em validação"
     if "backlog" in key or "proxima" in key:
         return "Próximas entregas"
-    return str(value).strip()
+    return "Próximas entregas"
 
 
 def parse_improvement_date(value: object) -> pd.Timestamp:
@@ -442,7 +442,7 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
         st.divider()
         st.caption(f"Atualização automática: a cada {CACHE_TTL // 60 or 1} min")
 
-# Aplicando filtros nas Melhorias (incluindo Status)
+    # Aplicando filtros nas Melhorias
     filtered_improvements = improvements.copy()
     filtered_improvements = apply_values(filtered_improvements, "Status", improvement_statuses)
     filtered_improvements = apply_values(filtered_improvements, "Categoria", improvement_categories)
@@ -455,7 +455,6 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
     if len(date_range) == 2 and section == "Melhorias":
         start_ts = pd.Timestamp(date_range[0])
         end_ts = pd.Timestamp(date_range[1]) + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1)
-        # Mantém se a data for vazia (isna) OU estiver dentro do intervalo escolhido
         filtered_improvements = filtered_improvements[
             filtered_improvements["Início"].isna() | 
             filtered_improvements["Início"].between(start_ts, end_ts)
@@ -469,7 +468,6 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
     if len(date_range) == 2 and section == "Incidentes":
         start_ts = pd.Timestamp(date_range[0])
         end_ts = pd.Timestamp(date_range[1]) + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1)
-        # Mantém se a data de atualização for vazia (isna) OU estiver dentro do intervalo
         filtered_incidents = filtered_incidents[
             filtered_incidents["Atualizado em"].isna() | 
             filtered_incidents["Atualizado em"].between(start_ts, end_ts)
@@ -507,7 +505,7 @@ def render_kanban_card(row: pd.Series) -> str:
     """
 
 
-# Quadro Kanban com mecanismo "Ver mais" retrátil por coluna
+# Quadro Kanban sem a coluna "Não informado"
 def render_kanban_board(frame: pd.DataFrame) -> None:
     st.markdown('<div class="section-label">Quadro Kanban de Melhorias</div>', unsafe_allow_html=True)
     
@@ -517,9 +515,6 @@ def render_kanban_board(frame: pd.DataFrame) -> None:
         {"title": "Em validação", "color": "#8b5cf6", "bg": "#8b5cf618"},
         {"title": "Concluída", "color": "#10b981", "bg": "#10b98118"},
     ]
-    
-    if (frame["Status"] == "Não informado").any():
-        columns_config.append({"title": "Não informado", "color": "#64748b", "bg": "#64748b18"})
 
     cols = st.columns(len(columns_config))
     CARDS_LIMITE_INICIAL = 3  # Número de cards visíveis diretamente antes de recolher
@@ -529,7 +524,6 @@ def render_kanban_board(frame: pd.DataFrame) -> None:
         items = frame[frame["Status"] == status_name]
         
         with col:
-            # Cabeçalho da coluna
             st.markdown(
                 f"""
                 <div style="background:{cfg['bg']}; border-top: 3px solid {cfg['color']}; padding: 8px 12px; border-radius: 8px 8px 0 0; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
@@ -546,25 +540,23 @@ def render_kanban_board(frame: pd.DataFrame) -> None:
                 visible_items = items.iloc[:CARDS_LIMITE_INICIAL]
                 hidden_items = items.iloc[CARDS_LIMITE_INICIAL:]
                 
-                # Exibe primeiros N cards
                 for _, row in visible_items.iterrows():
                     st.markdown(render_kanban_card(row), unsafe_allow_html=True)
                 
-                # Se houver excedentes, agrupa em seção retrátil "Ver mais"
                 if not hidden_items.empty:
                     with st.expander(f"➕ Ver mais {len(hidden_items)} item(ns)", expanded=False):
                         for _, row in hidden_items.iterrows():
                             st.markdown(render_kanban_card(row), unsafe_allow_html=True)
 
 
-# Desenha a seção de Melhorias na ordem reestruturada
+# Desenha a seção de Melhorias
 def render_improvements(frame: pd.DataFrame) -> None:
     start_values = frame["Início"].dropna()
     end_values = frame["Fim"].dropna()
     if not start_values.empty and not end_values.empty:
         period_str = f"Período: {start_values.min().strftime('%d/%m/%Y')} a {end_values.max().strftime('%d/%m/%Y')}"
     else:
-        period_str = "Período: Não informado"
+        period_str = "Período:  "
     st.caption(period_str)
     
     if frame.empty:
@@ -577,7 +569,6 @@ def render_improvements(frame: pd.DataFrame) -> None:
     developing = int(frame["Status"].eq("Em desenvolvimento").sum())
     validation = int(frame["Status"].eq("Em validação").sum())
     upcoming = int(frame["Status"].eq("Próximas entregas").sum())
-    unreported = int(frame["Status"].eq("Não informado").sum())
 
     # 1. Indicadores (KPIs)
     st.markdown('<div class="section-label">Indicadores executivos</div>', unsafe_allow_html=True)
@@ -588,11 +579,11 @@ def render_improvements(frame: pd.DataFrame) -> None:
     overview[3].metric("Em validação", format_number(validation))
     overview[4].metric("Próximas entregas", format_number(upcoming))
 
-    # 2. Volume por status (Gráfico)
+    # 2. Volume por status (Gráfico) - Sem "Não informado"
     st.markdown('<div class="section-label">Acompanhamento por status</div>', unsafe_allow_html=True)
     status_counts = pd.DataFrame({
-        "Status": ["Concluída", "Em desenvolvimento", "Em validação", "Próximas entregas", "Não informado"],
-        "Quantidade": [completed, developing, validation, upcoming, unreported]
+        "Status": ["Concluída", "Em desenvolvimento", "Em validação", "Próximas entregas"],
+        "Quantidade": [completed, developing, validation, upcoming]
     })
     status_counts = status_counts[status_counts["Quantidade"] > 0]
     
@@ -603,7 +594,7 @@ def render_improvements(frame: pd.DataFrame) -> None:
         text="Quantidade",
         title="Volume atual por status",
         color="Status",
-        color_discrete_map={"Concluída": "#10b981", "Em desenvolvimento": "#3b82f6", "Em validação": "#8b5cf6", "Próximas entregas": "#f59e0b", "Não informado": "#64748b"},
+        color_discrete_map={"Concluída": "#10b981", "Em desenvolvimento": "#3b82f6", "Em validação": "#8b5cf6", "Próximas entregas": "#f59e0b"},
     )
     status_chart.update_traces(texttemplate="%{y:.0f}", textposition="outside", textfont_size=11, cliponaxis=False)
     st.plotly_chart(chart_figure(status_chart), use_container_width=True)
@@ -611,7 +602,7 @@ def render_improvements(frame: pd.DataFrame) -> None:
     # 3. Quadro Kanban Retrátil
     render_kanban_board(frame)
 
-    # 4. Gráficos de Categoria (Gráfico de Barras Horizontal para legibilidade) e Prioridade
+    # 4. Gráficos de Categoria e Prioridade
     st.markdown('<div class="section-label">Análise de Categoria e Prioridade</div>', unsafe_allow_html=True)
     left, right = st.columns(2)
     with left:
