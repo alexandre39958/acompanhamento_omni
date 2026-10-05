@@ -26,10 +26,10 @@ st.set_page_config(
 # Diretórios base de trabalho
 WORKSPACE_DIR = Path(__file__).resolve().parent
 DOWNLOADS_DIR = WORKSPACE_DIR.parent
-MAX_PAYLOAD_BYTES = 50 * 1024 * 1024  # Limite de segurança de 50 MB para download
+MAX_PAYLOAD_BYTES = 50 * 1024 * 1024  # Limite de segurança de 50 MB
 
 
-# Leitura segura de variáveis de ambiente ou segredos do Streamlit (sem fallback exposto)
+# Leitura segura de variáveis de ambiente ou segredos do Streamlit
 def setting(name: str, default: str = "") -> str:
     value = os.getenv(name)
     if value:
@@ -61,7 +61,7 @@ IMPROVEMENT_COLUMNS = [
 INCIDENT_COLUMNS = [
     "Número",
     "Aberto(a)",
-    "Resumo",
+    "Descrição",
     "Solicitante",
     "Estado",
     "Atribuição a",
@@ -69,7 +69,7 @@ INCIDENT_COLUMNS = [
 ]
 
 
-# Injeção dos estilos CSS para o Kanban e ajuste de exibição do cabeçalho
+# Injeção dos estilos CSS
 def inject_styles() -> None:
     st.markdown(
         """
@@ -87,7 +87,6 @@ def inject_styles() -> None:
             color: var(--text-color) !important;
         }
 
-        /* 1. Oculta o menu, botão de deploy e a barra superior (Fork/GitHub) */
         #MainMenu, 
         [data-testid="stAppDeployButton"], 
         [data-testid="stToolbar"] {
@@ -95,13 +94,11 @@ def inject_styles() -> None:
             visibility: hidden !important;
         }
 
-        /* 2. Mantém o cabeçalho invisível mas não quebra a seta da sidebar */
         [data-testid="stHeader"] {
             background-color: transparent !important;
             z-index: 100 !important;
         }
 
-        /* 3. Oculta o rodapé e badges do Streamlit */
         footer, 
         [data-testid="stFooter"], 
         [data-testid="stStatusWidget"], 
@@ -119,7 +116,6 @@ def inject_styles() -> None:
             pointer-events: none !important;
         }
 
-        /* Ajustes de layout principal e sidebar */
         [data-testid="stMainBlockContainer"] { 
             max-width: 1550px; 
             padding-top: 1.5rem !important; 
@@ -129,7 +125,6 @@ def inject_styles() -> None:
             border-right: 1px solid rgba(128, 128, 128, 0.2);
         }
 
-        /* Cartão do cabeçalho principal */
         .hero {
             padding: 1.4rem 1.5rem 1.35rem;
             border: 1px solid rgba(128, 128, 128, 0.2);
@@ -151,7 +146,6 @@ def inject_styles() -> None:
             margin: .28rem 0 .5rem;
         }
 
-        /* Cartões de métricas KPI */
         [data-testid="stMetric"] {
             background: var(--secondary-background-color);
             border: 1px solid rgba(128, 128, 128, 0.2);
@@ -176,7 +170,6 @@ def inject_styles() -> None:
             padding: .5rem;
         }
 
-        /* Estilização específica dos cartões Kanban */
         .kanban-card {
             background: var(--secondary-background-color);
             border: 1px solid rgba(128, 128, 128, 0.2);
@@ -351,11 +344,19 @@ def prepare_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, list[str]]
     incidents = normalize_columns(
         incidents,
         {
-            "Número": ["numero", "number", "ticket"], "Aberto(a)": ["aberto", "opened"],
-            "Resumo": ["short description", "descricao"], "Solicitante": ["requester"],
-            "Prioridade": ["priority"], "Estado": ["state", "status"], "Categoria": ["category"],
-            "Grupo de atribuição": ["assignment group"], "Atribuição a": ["assigned to"],
-            "Atualizado em": ["updated"], "Sistema": ["system"],
+            "Número": ["numero", "number", "ticket"],
+            "Aberto(a)": ["aberto", "opened"],
+            "Descrição": ["descricao", "resumo", "short description", "short_description"],
+            "Descrição resumida": ["descricao resumida", "descricao resumid", "resumo curto"],
+            "Solicitante": ["requester"],
+            "Prioridade": ["priority"],
+            "Estado": ["state", "status"],
+            "Categoria": ["category"],
+            "Grupo de atribuição": ["assignment group", "grupo de atribuicao"],
+            "Atribuição a": ["assigned to", "atribuicao a"],
+            "Atualizado em": ["updated", "atualizado em"],
+            "Código de resolução": ["codigo de resolucao", "resolucao", "fechamento"],
+            "Sistema": ["system"],
         },
     )
     updates = normalize_columns(
@@ -399,14 +400,14 @@ def get_priority_style(priority_value: str) -> tuple[str, str]:
     key = canonical(priority_value)
     if "alta" in key or "alto" in key:
         return "rgba(239, 68, 68, 0.15)", "#ef4444"
-    if "media" in key or "medio" in key:
+    if "media" in key or "medio" in key or "moderada" in key:
         return "rgba(245, 158, 11, 0.15)", "#f59e0b"
     if "baixa" in key or "baixo" in key:
         return "rgba(16, 185, 129, 0.15)", "#10b981"
     return "rgba(100, 116, 139, 0.15)", "#64748b"
 
 
-# Renderizador de Card individual do Kanban (Sanitizado com html.escape contra XSS)
+# Renderizador de Card do Kanban sanitizado contra XSS
 def render_kanban_card(row: pd.Series) -> str:
     categoria = html.escape(str(row["Categoria"])) if row["Categoria"] else "Geral"
     prioridade = html.escape(str(row["Prioridade"])) if row["Prioridade"] else "Normal"
@@ -437,7 +438,7 @@ def render_kanban_card(row: pd.Series) -> str:
     """
 
 
-# Quadro Kanban com sanitização de títulos e contadores
+# Quadro Kanban
 def render_kanban_board(frame: pd.DataFrame) -> None:
     st.markdown('<div class="section-label">Quadro Kanban de Melhorias</div>', unsafe_allow_html=True)
     
@@ -481,7 +482,7 @@ def render_kanban_board(frame: pd.DataFrame) -> None:
                             st.markdown(render_kanban_card(row), unsafe_allow_html=True)
 
 
-# Barra lateral
+# Barra lateral com filtros
 def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates: pd.DataFrame, section: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     with st.sidebar:
         st.markdown("## OMNI\n**Governança operacional**")
@@ -489,6 +490,7 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
         improvement_statuses, improvement_categories, improvement_priorities = [], [], []
         improvement_search = ""
         incident_categories, incident_priorities, incident_states, incident_assignees, incident_groups = [], [], [], [], []
+        incident_search = ""
         update_months = []
         date_range = (date.today(), date.today())
         
@@ -502,6 +504,7 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
             max_date = valid_dates.max().date() if not valid_dates.empty else date.today()
             date_range = st.date_input("Intervalo de início", value=(min_date, max_date), min_value=min_date, max_value=max_date, key="improvement_date")
         elif section == "Incidentes":
+            incident_search = st.text_input("Busca textual", placeholder="Número, descrição ou solicitante", key="incident_search")
             incident_categories = select_filter("Categoria", options(incidents, "Categoria"), "incident_category")
             incident_priorities = select_filter("Prioridade", options(incidents, "Prioridade"), "incident_priority")
             incident_states = select_filter("Estado do incidente", options(incidents, "Estado"), "incident_state")
@@ -515,6 +518,7 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
         st.divider()
         st.caption(f"Atualização automática: a cada {CACHE_TTL // 60 or 1} min")
 
+    # Filtros de Melhorias
     filtered_improvements = improvements.copy()
     filtered_improvements = apply_values(filtered_improvements, "Status", improvement_statuses)
     filtered_improvements = apply_values(filtered_improvements, "Categoria", improvement_categories)
@@ -532,10 +536,20 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
             filtered_improvements["Início"].between(start_ts, end_ts)
         ]
     
+    # Filtros de Incidentes
     filtered_incidents = incidents.copy()
     for col, sel in [("Categoria", incident_categories), ("Prioridade", incident_priorities), ("Estado", incident_states), ("Atribuição a", incident_assignees), ("Grupo de atribuição", incident_groups)]:
         filtered_incidents = apply_values(filtered_incidents, col, sel)
         
+    if incident_search:
+        query = incident_search.casefold()
+        searchable = (
+            filtered_incidents["Número"].astype(str) + " " +
+            filtered_incidents["Descrição"].astype(str) + " " +
+            filtered_incidents["Solicitante"].astype(str)
+        )
+        filtered_incidents = filtered_incidents[searchable.str.casefold().str.contains(query, na=False)]
+
     if len(date_range) == 2 and section == "Incidentes":
         start_ts = pd.Timestamp(date_range[0])
         end_ts = pd.Timestamp(date_range[1]) + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1)
@@ -548,7 +562,7 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
     return filtered_improvements, filtered_incidents, filtered_updates
 
 
-# Desenha a seção de Melhorias
+# Desenha o painel de Melhorias
 def render_improvements(frame: pd.DataFrame) -> None:
     start_values = frame["Início"].dropna()
     end_values = frame["Fim"].dropna()
