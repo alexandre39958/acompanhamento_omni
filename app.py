@@ -25,8 +25,15 @@ st.set_page_config(
 
 # Diretórios base de trabalho
 WORKSPACE_DIR = Path(__file__).resolve().parent
-DOWNLOADS_DIR = WORKSPACE_DIR.parent
 MAX_PAYLOAD_BYTES = 50 * 1024 * 1024  # Limite de segurança de 50 MB
+
+# Mapeamento oficial de cores por status
+STATUS_COLOR_MAP = {
+    "Próximas entregas": "#f59e0b",
+    "Em desenvolvimento": "#3b82f6",
+    "Em validação": "#8b5cf6",
+    "Concluída": "#10b981",
+}
 
 
 # Leitura segura de variáveis de ambiente ou segredos do Streamlit
@@ -69,7 +76,7 @@ INCIDENT_COLUMNS = [
 ]
 
 
-# Injeção dos estilos CSS
+# Injeção dos estilos CSS globais
 def inject_styles() -> None:
     st.markdown(
         """
@@ -84,9 +91,9 @@ def inject_styles() -> None:
         h1, h2, h3 {
             font-family: 'Space Grotesk', sans-serif !important;
             letter-spacing: 0 !important;
-            color: var(--text-color) !important;
         }
 
+        /* 1. Oculta menus padrão e deploy do Streamlit */
         #MainMenu, 
         [data-testid="stAppDeployButton"], 
         [data-testid="stToolbar"] {
@@ -96,7 +103,7 @@ def inject_styles() -> None:
 
         [data-testid="stHeader"] {
             background-color: transparent !important;
-            z-index: 100 !important;
+            z-index: 99 !important;
         }
 
         footer, 
@@ -117,16 +124,81 @@ def inject_styles() -> None:
         }
 
         [data-testid="stMainBlockContainer"] { 
-            max-width: 1550px; 
+            max-width: 1600px; 
             padding-top: 1.5rem !important; 
         }
 
+        /* 2. Barra lateral compacta, esguia e organizada */
         [data-testid="stSidebar"] {
+            min-width: 260px !important;
+            max-width: 275px !important;
+            width: 270px !important;
             border-right: 1px solid rgba(128, 128, 128, 0.2);
         }
 
+        [data-testid="stSidebarUserContent"] {
+            padding: 1rem 0.75rem 1.5rem 0.75rem !important;
+        }
+
+        /* Reduz espaçamento vertical entre filtros da sidebar */
+        [data-testid="stSidebar"] [data-testid="stElementContainer"] {
+            margin-bottom: 0.25rem !important;
+        }
+
+        [data-testid="stSidebar"] label {
+            font-size: 0.75rem !important;
+            font-weight: 600 !important;
+            margin-bottom: 0.1rem !important;
+            color: rgba(255, 255, 255, 0.85) !important;
+        }
+
+        [data-testid="stSidebar"] .stMultiSelect div[data-baseweb="select"] > div {
+            min-height: 1.95rem !important;
+            padding-top: 0.05rem !important;
+            padding-bottom: 0.05rem !important;
+            font-size: 0.78rem !important;
+        }
+
+        [data-testid="stSidebar"] input {
+            font-size: 0.78rem !important;
+            height: 1.95rem !important;
+        }
+
+        /* 3. BOTÃO DE REABRIR A SIDEBAR SEMPRE VISÍVEL COM DESTAQUE */
+        [data-testid="stSidebarCollapsedControl"] {
+            display: flex !important;
+            visibility: visible !important;
+            position: fixed !important;
+            top: 0.75rem !important;
+            left: 0.75rem !important;
+            z-index: 999999 !important;
+            opacity: 1 !important;
+        }
+
+        [data-testid="stSidebarCollapsedControl"] button {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            background-color: var(--secondary-background-color) !important;
+            border: 1px solid rgba(128, 128, 128, 0.4) !important;
+            border-radius: 0.5rem !important;
+            width: 2.2rem !important;
+            height: 2.2rem !important;
+            color: #ffffff !important;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35) !important;
+            cursor: pointer !important;
+        }
+
+        [data-testid="stSidebarCollapsedControl"] svg,
+        [data-testid="stSidebarCollapsedControl"] path {
+            fill: #ffffff !important;
+            stroke: #ffffff !important;
+            color: #ffffff !important;
+        }
+
+        /* Hero Header */
         .hero {
-            padding: 1.4rem 1.5rem 1.35rem;
+            padding: 1.3rem 1.5rem;
             border: 1px solid rgba(128, 128, 128, 0.2);
             border-radius: 1rem;
             margin-bottom: 1.2rem;
@@ -141,16 +213,17 @@ def inject_styles() -> None:
             letter-spacing: .12em;
         }
         .hero h1 {
-            font-size: clamp(2rem, 4vw, 3.55rem);
-            line-height: 1;
-            margin: .28rem 0 .5rem;
+            font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+            line-height: 1.1;
+            margin: .25rem 0 .4rem;
         }
 
+        /* Cartões de Métricas */
         [data-testid="stMetric"] {
             background: var(--secondary-background-color);
             border: 1px solid rgba(128, 128, 128, 0.2);
-            padding: 1rem;
-            border-radius: 1rem;
+            padding: 0.85rem 1rem;
+            border-radius: 0.85rem;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
         }
 
@@ -160,7 +233,7 @@ def inject_styles() -> None:
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: .1em;
-            margin: 1.5rem 0 .4rem;
+            margin: 1.3rem 0 .4rem;
         }
 
         div[data-testid="stPlotlyChart"] {
@@ -170,17 +243,29 @@ def inject_styles() -> None:
             padding: .5rem;
         }
 
+        /* Container do Cartão Kanban */
+        div[class*="st-key-cont_card_"] {
+            position: relative !important;
+            margin-bottom: 0.75rem !important;
+            transition: transform 0.15s ease;
+        }
+        div[class*="st-key-cont_card_"]:hover {
+            transform: translateY(-2px);
+        }
+        div[class*="st-key-cont_card_"]:hover .kanban-card {
+            border-color: var(--primary-color) !important;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12) !important;
+        }
+
+        /* Cartão Kanban */
         .kanban-card {
             background: var(--secondary-background-color);
             border: 1px solid rgba(128, 128, 128, 0.2);
             border-radius: 0.75rem;
             padding: 0.85rem;
-            margin-bottom: 0.65rem;
             box-shadow: 0 2px 8px rgba(0,0,0,0.03);
-            transition: transform 0.1s ease, border-color 0.1s ease;
-        }
-        .kanban-card:hover {
-            border-color: var(--primary-color);
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+            cursor: pointer;
         }
         .kanban-card-title {
             font-weight: 700;
@@ -201,10 +286,49 @@ def inject_styles() -> None:
             font-size: 0.75rem;
             opacity: 0.75;
             display: flex;
-            justify-content: flex-end;
+            justify-content: space-between;
             margin-top: 0.4rem;
             padding-top: 0.35rem;
             border-top: 1px dashed rgba(128,128,128,0.2);
+        }
+
+        /* Botão invisível sobreposto cobrindo todo o cartão */
+        div[class*="st-key-cont_card_"] div[data-testid="stElementContainer"]:has(.stButton) {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            z-index: 5 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        div[class*="st-key-cont_card_"] .stButton {
+            width: 100% !important;
+            height: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        div[class*="st-key-cont_card_"] .stButton > button {
+            width: 100% !important;
+            height: 100% !important;
+            opacity: 0 !important;
+            border: none !important;
+            background: transparent !important;
+            cursor: pointer !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+
+        /* Janela Modal compacta e elegante */
+        div[role="dialog"] {
+            width: 760px !important;
+            max-width: 90vw !important;
+            border-radius: 1rem !important;
+            border: 1px solid rgba(128, 128, 128, 0.25) !important;
+            background-color: var(--secondary-background-color) !important;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45) !important;
+            overflow: hidden !important;
         }
         </style>
         """,
@@ -249,8 +373,6 @@ def normalize_improvement_status(value: object) -> str:
         return "Em desenvolvimento"
     if "homolog" in key or "validac" in key:
         return "Em validação"
-    if "backlog" in key or "proxima" in key:
-        return "Próximas entregas"
     return "Próximas entregas"
 
 
@@ -297,7 +419,7 @@ def downloadable_url(source: str) -> str:
 def load_source(source: str, source_name: str) -> tuple[pd.DataFrame, str | None]:
     try:
         if not source:
-            return pd.DataFrame(), f"A URL de {source_name} não está configurada (verifique as variáveis de ambiente ou .streamlit/secrets.toml)."
+            return pd.DataFrame(), f"A URL de {source_name} não está configurada (defina via ambiente ou .streamlit/secrets.toml)."
         
         if source.startswith(("http://", "https://")):
             request = Request(downloadable_url(source), headers={"User-Agent": "OMNI-dashboard/1.0"})
@@ -395,19 +517,17 @@ def csv_download(frame: pd.DataFrame, filename: str, label: str) -> None:
     st.download_button(label, data=payload, file_name=filename, mime="text/csv", use_container_width=False)
 
 
-# Mapeamento dinâmico de cores para Prioridade
 def get_priority_style(priority_value: str) -> tuple[str, str]:
     key = canonical(priority_value)
-    if "alta" in key or "alto" in key:
+    if any(term in key for term in ["altissima", "alta", "alto", "urgente"]):
         return "rgba(239, 68, 68, 0.15)", "#ef4444"
-    if "media" in key or "medio" in key or "moderada" in key:
+    if any(term in key for term in ["media", "medio", "moderada"]):
         return "rgba(245, 158, 11, 0.15)", "#f59e0b"
-    if "baixa" in key or "baixo" in key:
+    if any(term in key for term in ["baixa", "baixo"]):
         return "rgba(16, 185, 129, 0.15)", "#10b981"
     return "rgba(100, 116, 139, 0.15)", "#64748b"
 
 
-# Renderizador de Card do Kanban sanitizado contra XSS
 def render_kanban_card(row: pd.Series) -> str:
     categoria = html.escape(str(row["Categoria"])) if row["Categoria"] else "Geral"
     prioridade = html.escape(str(row["Prioridade"])) if row["Prioridade"] else "Normal"
@@ -415,8 +535,8 @@ def render_kanban_card(row: pd.Series) -> str:
     dt_inicio = html.escape(format_date(row["Início"]))
     
     desc_raw = str(row["Descrição"])
-    if len(desc_raw) > 75:
-        desc_raw = desc_raw[:75] + "..."
+    if len(desc_raw) > 80:
+        desc_raw = desc_raw[:80] + "..."
     desc = html.escape(desc_raw)
     melhoria = html.escape(str(row["Melhoria"]))
         
@@ -429,7 +549,7 @@ def render_kanban_card(row: pd.Series) -> str:
             <span class="kanban-badge" style="background:rgba(59, 130, 246, 0.15); color:#3b82f6;">🏷️ {categoria}</span>
             <span class="kanban-badge" style="background:{prio_bg}; color:{prio_color};">● {prioridade}</span>
         </div>
-        <div style="font-size: 0.78rem; opacity: 0.8; margin-top: 0.2rem;">{desc}</div>
+        <div style="font-size: 0.78rem; opacity: 0.8; margin-top: 0.35rem; line-height: 1.35;">{desc}</div>
         <div class="kanban-meta">
             <span>👤 {responsavel}</span>
             <span>📅 {dt_inicio}</span>
@@ -438,7 +558,122 @@ def render_kanban_card(row: pd.Series) -> str:
     """
 
 
-# Quadro Kanban
+def render_modal_content(row: pd.Series) -> None:
+    melhoria = html.escape(str(row["Melhoria"]))
+    categoria = html.escape(str(row["Categoria"] or "Geral"))
+    prioridade = html.escape(str(row["Prioridade"] or "Normal"))
+    status = html.escape(str(row["Status"] or "Próximas entregas"))
+    responsavel = html.escape(str(row["Profissional alocado"] or "Não atribuído"))
+    desc = str(row["Descrição"]) if row["Descrição"] else "Nenhuma descrição detalhada informada."
+    
+    prio_bg, prio_color = get_priority_style(prioridade)
+    header_bg = STATUS_COLOR_MAP.get(str(row["Status"]), "#3b82f6")
+
+    st.markdown(
+        f"""
+        <style>
+        div[role="dialog"] button[aria-label="Close"],
+        [data-testid="stDialog"] button[aria-label="Close"] {{
+            position: absolute !important;
+            top: 0.95rem !important;
+            right: 1.15rem !important;
+            z-index: 100000 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 2rem !important;
+            height: 2rem !important;
+            background: rgba(0, 0, 0, 0.25) !important;
+            border-radius: 50% !important;
+            border: none !important;
+            color: #ffffff !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            cursor: pointer !important;
+        }}
+        div[role="dialog"] button[aria-label="Close"] svg,
+        div[role="dialog"] button[aria-label="Close"] path {{
+            fill: #ffffff !important;
+            stroke: #ffffff !important;
+            color: #ffffff !important;
+            width: 1rem !important;
+            height: 1rem !important;
+        }}
+        </style>
+        <div style="background-color: {header_bg}; margin: -3.6rem -1.5rem 1rem -1.5rem; padding: 1.7rem 1.4rem 0.9rem 1.4rem; border-top-left-radius: 0.85rem; border-top-right-radius: 0.85rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid rgba(255, 255, 255, 0.2);">
+            <span style="color: #ffffff !important; font-size: 1.05rem; font-weight: 700; font-family: 'Space Grotesk', sans-serif;">
+                Demanda / Detalhes do Card
+            </span>
+            <span style="background: rgba(255, 255, 255, 0.25); color: #ffffff !important; font-weight: 700; font-size: 0.78rem; padding: 0.22rem 0.75rem; border-radius: 12px; margin-right: 3.2rem;">
+                📌 {status}
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        f"""
+        <div style="margin-bottom: 0.85rem;">
+            <div style="font-size: 0.68rem; font-weight: 700; text-transform: uppercase; color: var(--primary-color); letter-spacing: 0.1em; margin-bottom: 0.15rem;">
+                Melhoria
+            </div>
+            <h3 style="margin: 0 0 0.45rem 0; font-size: 1.25rem; line-height: 1.3; color: #ffffff;">{melhoria}</h3>
+            <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                <span class="kanban-badge" style="background:rgba(59, 130, 246, 0.15); color:#3b82f6; font-size:0.72rem; padding: 0.18rem 0.5rem;">🏷️ {categoria}</span>
+                <span class="kanban-badge" style="background:{prio_bg}; color:{prio_color}; font-size:0.72rem; padding: 0.18rem 0.5rem;">● {prioridade}</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    col_desc, col_meta = st.columns([1.9, 1.1], gap="medium")
+
+    with col_desc:
+        st.markdown("<p style='font-weight: 700; font-size: 0.82rem; margin-bottom: 0.3rem; color: #ffffff;'>📝 Descrição Completa</p>", unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div style="background: rgba(128, 128, 128, 0.06); border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 0.5rem; padding: 0.75rem 0.9rem; font-size: 0.84rem; line-height: 1.45; white-space: pre-wrap; min-height: 80px; color: #ffffff;">
+                {html.escape(desc)}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with col_meta:
+        st.markdown("<p style='font-weight: 700; font-size: 0.82rem; margin-bottom: 0.3rem; color: #ffffff;'>⚙ Detalhes e Prazos</p>", unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div style="background: rgba(128, 128, 128, 0.06); border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 0.5rem; padding: 0.7rem 0.85rem; font-size: 0.8rem; line-height: 1.4; color: #ffffff;">
+                <p style="margin-bottom: 0.4rem;"><strong>👤 Responsável:</strong><br><span style="opacity: 0.9;">{responsavel}</span></p>
+                <p style="margin-bottom: 0.4rem;"><strong>📅 Início:</strong> {format_date(row['Início'])}</p>
+                <p style="margin-bottom: 0;"><strong>🏁 Previsão:</strong> {format_date(row['Fim'])}</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown("<div style='margin-top: 0.6rem;'></div>", unsafe_allow_html=True)
+        if st.button("✕ Fechar janela", key="close_card_modal", use_container_width=True):
+            st.rerun()
+
+
+dialog_decorator = getattr(st, "dialog", getattr(st, "experimental_dialog", None))
+
+if dialog_decorator:
+    try:
+        @dialog_decorator(title=" ", width="large")
+        def show_card_details(row: pd.Series):
+            render_modal_content(row)
+    except TypeError:
+        @dialog_decorator(" ")
+        def show_card_details(row: pd.Series):
+            render_modal_content(row)
+else:
+    def show_card_details(row: pd.Series):
+        render_modal_content(row)
+
+
 def render_kanban_board(frame: pd.DataFrame) -> None:
     st.markdown('<div class="section-label">Quadro Kanban de Melhorias</div>', unsafe_allow_html=True)
     
@@ -450,9 +685,9 @@ def render_kanban_board(frame: pd.DataFrame) -> None:
     ]
 
     cols = st.columns(len(columns_config))
-    CARDS_LIMITE_INICIAL = 3
+    CARDS_LIMITE_INICIAL = 1
 
-    for col, cfg in zip(cols, columns_config):
+    for col_idx, (col, cfg) in enumerate(zip(cols, columns_config)):
         status_name = cfg["title"]
         items = frame[frame["Status"] == status_name]
         
@@ -473,19 +708,35 @@ def render_kanban_board(frame: pd.DataFrame) -> None:
                 visible_items = items.iloc[:CARDS_LIMITE_INICIAL]
                 hidden_items = items.iloc[CARDS_LIMITE_INICIAL:]
                 
-                for _, row in visible_items.iterrows():
-                    st.markdown(render_kanban_card(row), unsafe_allow_html=True)
+                for idx, (_, row) in enumerate(visible_items.iterrows()):
+                    card_uid = f"card_vis_{col_idx}_{idx}_{row.name}"
+                    with st.container(key=f"cont_{card_uid}"):
+                        st.markdown(render_kanban_card(row), unsafe_allow_html=True)
+                        if st.button("Abrir", key=f"btn_{card_uid}"):
+                            show_card_details(row)
                 
                 if not hidden_items.empty:
                     with st.expander(f"➕ Ver mais {len(hidden_items)} item(ns)", expanded=False):
-                        for _, row in hidden_items.iterrows():
-                            st.markdown(render_kanban_card(row), unsafe_allow_html=True)
+                        for idx, (_, row) in enumerate(hidden_items.iterrows()):
+                            card_uid = f"card_hid_{col_idx}_{idx}_{row.name}"
+                            with st.container(key=f"cont_{card_uid}"):
+                                st.markdown(render_kanban_card(row), unsafe_allow_html=True)
+                                if st.button("Abrir", key=f"btn_{card_uid}"):
+                                    show_card_details(row)
 
 
-# Barra lateral com filtros
+# Barra lateral com filtros compactos
 def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates: pd.DataFrame, section: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     with st.sidebar:
-        st.markdown("## OMNI\n**Governança operacional**")
+        st.markdown(
+            """
+            <div style="margin-bottom: 0.65rem;">
+                <div style="font-size: 1.1rem; font-weight: 700; font-family: 'Space Grotesk', sans-serif;">OMNI</div>
+                <div style="font-size: 0.68rem; font-weight: 600; text-transform: uppercase; color: var(--primary-color); letter-spacing: 0.08em;">Governança operacional</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         st.caption(f"Filtros de {section.lower()}")
         improvement_statuses, improvement_categories, improvement_priorities = [], [], []
         improvement_search = ""
@@ -495,28 +746,28 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
         date_range = (date.today(), date.today())
         
         if section == "Melhorias":
-            improvement_statuses = select_filter("Status", options(improvements, "Status"), "improvement_status")
-            improvement_categories = select_filter("Categoria", options(improvements, "Categoria"), "improvement_category")
-            improvement_priorities = select_filter("Prioridade", options(improvements, "Prioridade"), "improvement_priority")
-            improvement_search = st.text_input("Busca textual", placeholder="Melhoria ou descrição", key="improvement_search")
+            improvement_search = st.text_input("Busca textual", placeholder="Nome ou descrição", key="imp_search")
+            improvement_statuses = select_filter("Status", options(improvements, "Status"), "imp_status")
+            improvement_categories = select_filter("Categoria", options(improvements, "Categoria"), "imp_cat")
+            improvement_priorities = select_filter("Prioridade", options(improvements, "Prioridade"), "imp_prio")
             valid_dates = improvements["Início"].dropna()
             min_date = valid_dates.min().date() if not valid_dates.empty else date.today() - timedelta(days=30)
             max_date = valid_dates.max().date() if not valid_dates.empty else date.today()
-            date_range = st.date_input("Intervalo de início", value=(min_date, max_date), min_value=min_date, max_value=max_date, key="improvement_date")
+            date_range = st.date_input("Início", value=(min_date, max_date), min_value=min_date, max_value=max_date, key="imp_date")
         elif section == "Incidentes":
-            incident_search = st.text_input("Busca textual", placeholder="Número, descrição ou solicitante", key="incident_search")
-            incident_categories = select_filter("Categoria", options(incidents, "Categoria"), "incident_category")
-            incident_priorities = select_filter("Prioridade", options(incidents, "Prioridade"), "incident_priority")
-            incident_states = select_filter("Estado do incidente", options(incidents, "Estado"), "incident_state")
-            incident_assignees = select_filter("Atribuição", options(incidents, "Atribuição a"), "incident_assignee")
-            incident_groups = select_filter("Grupo de atribuição", options(incidents, "Grupo de atribuição"), "incident_group")
+            incident_search = st.text_input("Busca textual", placeholder="Número, autor, texto", key="inc_search")
+            incident_states = select_filter("Estado", options(incidents, "Estado"), "inc_state")
+            incident_priorities = select_filter("Prioridade", options(incidents, "Prioridade"), "inc_prio")
+            incident_categories = select_filter("Categoria", options(incidents, "Categoria"), "inc_cat")
+            incident_assignees = select_filter("Atribuição", options(incidents, "Atribuição a"), "inc_assignee")
+            incident_groups = select_filter("Grupo de atribuição", options(incidents, "Grupo de atribuição"), "inc_group")
             valid_dates = incidents["Atualizado em"].dropna()
             min_date = valid_dates.min().date() if not valid_dates.empty else date.today() - timedelta(days=30)
             max_date = valid_dates.max().date() if not valid_dates.empty else date.today()
-            date_range = st.date_input("Intervalo de atualização", value=(min_date, max_date), min_value=min_date, max_value=max_date, key="incident_date")
+            date_range = st.date_input("Atualizado em", value=(min_date, max_date), min_value=min_date, max_value=max_date, key="inc_date")
             
         st.divider()
-        st.caption(f"Atualização automática: a cada {CACHE_TTL // 60 or 1} min")
+        st.caption(f"Atualização: a cada {CACHE_TTL // 60 or 1} min")
 
     # Filtros de Melhorias
     filtered_improvements = improvements.copy()
@@ -562,7 +813,7 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
     return filtered_improvements, filtered_incidents, filtered_updates
 
 
-# Desenha o painel de Melhorias
+# Painel de Melhorias
 def render_improvements(frame: pd.DataFrame) -> None:
     start_values = frame["Início"].dropna()
     end_values = frame["Fim"].dropna()
@@ -581,15 +832,49 @@ def render_improvements(frame: pd.DataFrame) -> None:
     developing = int(frame["Status"].eq("Em desenvolvimento").sum())
     validation = int(frame["Status"].eq("Em validação").sum())
     upcoming = int(frame["Status"].eq("Próximas entregas").sum())
+    
+    # Cálculo das porcentagens de avanço
+    completion_rate = (completed / total * 100) if total > 0 else 0
+    in_progress_rate = ((completed + validation + developing) / total * 100) if total > 0 else 0
 
+    # 1. Indicadores Executivos (com % de Conclusão)
     st.markdown('<div class="section-label">Indicadores executivos</div>', unsafe_allow_html=True)
-    overview = st.columns(5)
-    overview[0].metric("Total de melhorias", format_number(total))
+    overview = st.columns(6)
+    overview[0].metric("Total", format_number(total))
     overview[1].metric("Concluídas", format_number(completed))
-    overview[2].metric("Em desenvolvimento", format_number(developing))
-    overview[3].metric("Em validação", format_number(validation))
-    overview[4].metric("Próximas entregas", format_number(upcoming))
+    overview[2].metric("Em validação", format_number(validation))
+    overview[3].metric("Em andamento", format_number(developing))
+    overview[4].metric("Backlog", format_number(upcoming))
+    overview[5].metric("Taxa de Entrega", f"{completion_rate:.1f}%", help="Percentual de melhorias entregues em relação ao total")
 
+    # 2. Barra de Progresso Executiva Multi-Estágio
+    pct_concl = (completed / total * 100) if total > 0 else 0
+    pct_val = (validation / total * 100) if total > 0 else 0
+    pct_dev = (developing / total * 100) if total > 0 else 0
+    pct_upc = (upcoming / total * 100) if total > 0 else 0
+
+    st.markdown(
+        f"""
+        <div style="margin: 0.75rem 0 1.25rem 0;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.76rem; font-weight: 700; margin-bottom: 0.35rem;">
+                <span>Progresso do Portfólio ({in_progress_rate:.1f}% em andamento ou concluído)</span>
+                <span style="color: #10b981;">{completion_rate:.1f}% Concluído</span>
+            </div>
+            <div style="height: 10px; width: 100%; background: rgba(128, 128, 128, 0.2); border-radius: 6px; overflow: hidden; display: flex;">
+                <div style="width: {pct_concl}%; background-color: #10b981;" title="Concluídas: {pct_concl:.1f}%"></div>
+                <div style="width: {pct_val}%; background-color: #8b5cf6;" title="Em validação: {pct_val:.1f}%"></div>
+                <div style="width: {pct_dev}%; background-color: #3b82f6;" title="Em desenvolvimento: {pct_dev:.1f}%"></div>
+                <div style="width: {pct_upc}%; background-color: #f59e0b;" title="Próximas entregas: {pct_upc:.1f}%"></div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # 3. Quadro Kanban
+    render_kanban_board(frame)
+
+    # 4. Volume atual por status
     st.markdown('<div class="section-label">Acompanhamento por status</div>', unsafe_allow_html=True)
     status_counts = pd.DataFrame({
         "Status": ["Concluída", "Em desenvolvimento", "Em validação", "Próximas entregas"],
@@ -609,8 +894,7 @@ def render_improvements(frame: pd.DataFrame) -> None:
     status_chart.update_traces(texttemplate="%{y:.0f}", textposition="outside", textfont_size=11, cliponaxis=False)
     st.plotly_chart(chart_figure(status_chart), use_container_width=True)
 
-    render_kanban_board(frame)
-
+    # 5. Análise de Categoria e Prioridade
     st.markdown('<div class="section-label">Análise de Categoria e Prioridade</div>', unsafe_allow_html=True)
     left, right = st.columns(2)
     with left:
@@ -645,10 +929,12 @@ def render_improvements(frame: pd.DataFrame) -> None:
             title="Volume por prioridade",
             color="Prioridade",
             color_discrete_map={
+                "Altíssima": "#ef4444",
                 "Alta": "#ef4444",
                 "Alto": "#ef4444",
                 "Média": "#f59e0b",
                 "Médio": "#f59e0b",
+                "Moderada": "#f59e0b",
                 "Baixa": "#10b981",
                 "Baixo": "#10b981",
                 "Não informado": "#64748b"
@@ -656,6 +942,7 @@ def render_improvements(frame: pd.DataFrame) -> None:
         )
         st.plotly_chart(chart_figure(priority_chart), use_container_width=True)
 
+    # 6. Exportação
     st.markdown("---")
     table_to_export = frame[IMPROVEMENT_COLUMNS].copy()
     for col in ["Início", "Fim"]:
@@ -663,7 +950,7 @@ def render_improvements(frame: pd.DataFrame) -> None:
     csv_download(table_to_export, "omni_melhorias.csv", "⇩ Exportar melhorias filtradas em CSV")
 
 
-# Desenha o painel de Incidentes
+# Painel de Incidentes
 def render_incidents(frame: pd.DataFrame) -> None:
     st.markdown('<div class="section-label">Central de incidentes</div>', unsafe_allow_html=True)
     total = len(frame)
