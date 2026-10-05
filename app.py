@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import io
 import os
 import re
@@ -25,10 +26,11 @@ st.set_page_config(
 # Diretórios base de trabalho
 WORKSPACE_DIR = Path(__file__).resolve().parent
 DOWNLOADS_DIR = WORKSPACE_DIR.parent
+MAX_PAYLOAD_BYTES = 50 * 1024 * 1024  # Limite de segurança de 50 MB para download
 
 
-# Leitura de variáveis de ambiente ou segredos do Streamlit
-def setting(name: str, default: str) -> str:
+# Leitura segura de variáveis de ambiente ou segredos do Streamlit (sem fallback exposto)
+def setting(name: str, default: str = "") -> str:
     value = os.getenv(name)
     if value:
         return value
@@ -39,19 +41,10 @@ def setting(name: str, default: str) -> str:
     return str(value) if value else default
 
 
-# Fontes de dados padrão (Google Sheets exportados em CSV)
-IMPROVEMENTS_SOURCE = setting(
-    "OMNI_MELHORIAS_CSV_URL",
-    "https://docs.google.com/spreadsheets/d/1mOL5gvWcekfgbKvqxTKYUEv3kiPrFGW2JfUWva6x5V8/export?format=csv&gid=394660906",
-)
-INCIDENTS_SOURCE = setting(
-    "OMNI_INCIDENTES_CSV_URL",
-    "https://docs.google.com/spreadsheets/d/1m_NJ_mPxvGNvZpPXqYysnSmb9EI-Kd_2Phz1LJ0ScqQ/export?format=csv&gid=1170584752",
-)
-UPDATES_SOURCE = setting(
-    "OMNI_ATUALIZACOES_CSV_URL",
-    "https://docs.google.com/spreadsheets/d/12wDYwtSrFC_rieT37lK1MJ-d66DOCpLuMUfMOJqu3c0/export?format=csv",
-)
+# Fontes de dados lidas via secrets/env
+IMPROVEMENTS_SOURCE = setting("OMNI_MELHORIAS_CSV_URL")
+INCIDENTS_SOURCE = setting("OMNI_INCIDENTES_CSV_URL")
+UPDATES_SOURCE = setting("OMNI_ATUALIZACOES_CSV_URL")
 CACHE_TTL = int(os.getenv("OMNI_CACHE_TTL_SECONDS", "300"))
 
 # Mapeamento de colunas principais para exibição
@@ -74,6 +67,7 @@ INCIDENT_COLUMNS = [
     "Atribuição a",
     "Atualizado em",
 ]
+
 
 # Injeção dos estilos CSS para o Kanban e ajuste de exibição do cabeçalho
 def inject_styles() -> None:
@@ -107,7 +101,7 @@ def inject_styles() -> None:
             z-index: 100 !important;
         }
 
-        /* 3. Aniquila o rodapé e TODOS os ícones do canto inferior direito */
+        /* 3. Oculta o rodapé e badges do Streamlit */
         footer, 
         [data-testid="stFooter"], 
         [data-testid="stStatusWidget"], 
@@ -310,12 +304,16 @@ def downloadable_url(source: str) -> str:
 def load_source(source: str, source_name: str) -> tuple[pd.DataFrame, str | None]:
     try:
         if not source:
-            return pd.DataFrame(), None
+            return pd.DataFrame(), f"A URL de {source_name} não está configurada (verifique as variáveis de ambiente ou .streamlit/secrets.toml)."
+        
         if source.startswith(("http://", "https://")):
             request = Request(downloadable_url(source), headers={"User-Agent": "OMNI-dashboard/1.0"})
             with urlopen(request, timeout=30) as response:
-                payload = response.read()
+                payload = response.read(MAX_PAYLOAD_BYTES + 1)
+                if len(payload) > MAX_PAYLOAD_BYTES:
+                    return pd.DataFrame(), f"A fonte de {source_name} excede o limite seguro de 50 MB."
                 content_type = response.headers.get_content_type().lower()
+            
             is_excel = (
                 source.lower().split("?", 1)[0].endswith((".xlsx", ".xls"))
                 or "spreadsheet" in content_type
@@ -328,6 +326,7 @@ def load_source(source: str, source_name: str) -> tuple[pd.DataFrame, str | None
             if not source_path.exists():
                 return pd.DataFrame(), f"Arquivo de {source_name} não encontrado: {source_path}"
             frame = pd.read_excel(source_path)
+            
         if frame.empty:
             return pd.DataFrame(), f"A fonte de {source_name} está vazia."
         return frame, None
@@ -395,19 +394,94 @@ def csv_download(frame: pd.DataFrame, filename: str, label: str) -> None:
     st.download_button(label, data=payload, file_name=filename, mime="text/csv", use_container_width=False)
 
 
-# Mapeamento dinâmico de cores para Prioridade (Bolinhas coloridas ●)
+# Mapeamento dinâmico de cores para Prioridade
 def get_priority_style(priority_value: str) -> tuple[str, str]:
     key = canonical(priority_value)
     if "alta" in key or "alto" in key:
-        return "rgba(239, 68, 68, 0.15)", "#ef4444"    # Vermelho
+        return "rgba(239, 68, 68, 0.15)", "#ef4444"
     if "media" in key or "medio" in key:
-        return "rgba(245, 158, 11, 0.15)", "#f59e0b"   # Amarelo/Laranja
+        return "rgba(245, 158, 11, 0.15)", "#f59e0b"
     if "baixa" in key or "baixo" in key:
-        return "rgba(16, 185, 129, 0.15)", "#10b981"   # Verde
-    return "rgba(100, 116, 139, 0.15)", "#64748b"       # Cinza neutro
+        return "rgba(16, 185, 129, 0.15)", "#10b981"
+    return "rgba(100, 116, 139, 0.15)", "#64748b"
 
 
-# Barra lateral com inclusão do Filtro de Status
+# Renderizador de Card individual do Kanban (Sanitizado com html.escape contra XSS)
+def render_kanban_card(row: pd.Series) -> str:
+    categoria = html.escape(str(row["Categoria"])) if row["Categoria"] else "Geral"
+    prioridade = html.escape(str(row["Prioridade"])) if row["Prioridade"] else "Normal"
+    responsavel = html.escape(str(row["Profissional alocado"])) if row["Profissional alocado"] else "Não atribuído"
+    dt_inicio = html.escape(format_date(row["Início"]))
+    
+    desc_raw = str(row["Descrição"])
+    if len(desc_raw) > 75:
+        desc_raw = desc_raw[:75] + "..."
+    desc = html.escape(desc_raw)
+    melhoria = html.escape(str(row["Melhoria"]))
+        
+    prio_bg, prio_color = get_priority_style(prioridade)
+
+    return f"""
+    <div class="kanban-card">
+        <div class="kanban-card-title">{melhoria}</div>
+        <div>
+            <span class="kanban-badge" style="background:rgba(59, 130, 246, 0.15); color:#3b82f6;">🏷️ {categoria}</span>
+            <span class="kanban-badge" style="background:{prio_bg}; color:{prio_color};">● {prioridade}</span>
+        </div>
+        <div style="font-size: 0.78rem; opacity: 0.8; margin-top: 0.2rem;">{desc}</div>
+        <div class="kanban-meta">
+            <span>👤 {responsavel}</span>
+            <span>📅 {dt_inicio}</span>
+        </div>
+    </div>
+    """
+
+
+# Quadro Kanban com sanitização de títulos e contadores
+def render_kanban_board(frame: pd.DataFrame) -> None:
+    st.markdown('<div class="section-label">Quadro Kanban de Melhorias</div>', unsafe_allow_html=True)
+    
+    columns_config = [
+        {"title": "Próximas entregas", "color": "#f59e0b", "bg": "#f59e0b18"},
+        {"title": "Em desenvolvimento", "color": "#3b82f6", "bg": "#3b82f618"},
+        {"title": "Em validação", "color": "#8b5cf6", "bg": "#8b5cf618"},
+        {"title": "Concluída", "color": "#10b981", "bg": "#10b98118"},
+    ]
+
+    cols = st.columns(len(columns_config))
+    CARDS_LIMITE_INICIAL = 3
+
+    for col, cfg in zip(cols, columns_config):
+        status_name = cfg["title"]
+        items = frame[frame["Status"] == status_name]
+        
+        with col:
+            st.markdown(
+                f"""
+                <div style="background:{cfg['bg']}; border-top: 3px solid {cfg['color']}; padding: 8px 12px; border-radius: 8px 8px 0 0; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: 700; font-size: 0.88rem;">{html.escape(status_name)}</span>
+                    <span style="background: {cfg['color']}; color: white; border-radius: 12px; padding: 2px 8px; font-size: 0.72rem; font-weight: 700;">{len(items)}</span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            
+            if items.empty:
+                st.caption("Nenhum item")
+            else:
+                visible_items = items.iloc[:CARDS_LIMITE_INICIAL]
+                hidden_items = items.iloc[CARDS_LIMITE_INICIAL:]
+                
+                for _, row in visible_items.iterrows():
+                    st.markdown(render_kanban_card(row), unsafe_allow_html=True)
+                
+                if not hidden_items.empty:
+                    with st.expander(f"➕ Ver mais {len(hidden_items)} item(ns)", expanded=False):
+                        for _, row in hidden_items.iterrows():
+                            st.markdown(render_kanban_card(row), unsafe_allow_html=True)
+
+
+# Barra lateral
 def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates: pd.DataFrame, section: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     with st.sidebar:
         st.markdown("## OMNI\n**Governança operacional**")
@@ -416,7 +490,6 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
         improvement_search = ""
         incident_categories, incident_priorities, incident_states, incident_assignees, incident_groups = [], [], [], [], []
         update_months = []
-        update_search = ""
         date_range = (date.today(), date.today())
         
         if section == "Melhorias":
@@ -442,7 +515,6 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
         st.divider()
         st.caption(f"Atualização automática: a cada {CACHE_TTL // 60 or 1} min")
 
-    # Aplicando filtros nas Melhorias
     filtered_improvements = improvements.copy()
     filtered_improvements = apply_values(filtered_improvements, "Status", improvement_statuses)
     filtered_improvements = apply_values(filtered_improvements, "Categoria", improvement_categories)
@@ -460,7 +532,6 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
             filtered_improvements["Início"].between(start_ts, end_ts)
         ]
     
-    # Aplicando filtros nos Incidentes
     filtered_incidents = incidents.copy()
     for col, sel in [("Categoria", incident_categories), ("Prioridade", incident_priorities), ("Estado", incident_states), ("Atribuição a", incident_assignees), ("Grupo de atribuição", incident_groups)]:
         filtered_incidents = apply_values(filtered_incidents, col, sel)
@@ -477,78 +548,6 @@ def render_sidebar(improvements: pd.DataFrame, incidents: pd.DataFrame, updates:
     return filtered_improvements, filtered_incidents, filtered_updates
 
 
-# Renderizador de Card individual do Kanban
-def render_kanban_card(row: pd.Series) -> str:
-    categoria = row['Categoria'] if row['Categoria'] else 'Geral'
-    prioridade = row['Prioridade'] if row['Prioridade'] else 'Normal'
-    responsavel = row['Profissional alocado'] if row['Profissional alocado'] else 'Não atribuído'
-    dt_inicio = format_date(row['Início'])
-    desc = str(row['Descrição'])
-    if len(desc) > 75:
-        desc = desc[:75] + "..."
-        
-    prio_bg, prio_color = get_priority_style(prioridade)
-
-    return f"""
-    <div class="kanban-card">
-        <div class="kanban-card-title">{row['Melhoria']}</div>
-        <div>
-            <span class="kanban-badge" style="background:rgba(59, 130, 246, 0.15); color:#3b82f6;">🏷️ {categoria}</span>
-            <span class="kanban-badge" style="background:{prio_bg}; color:{prio_color};">● {prioridade}</span>
-        </div>
-        <div style="font-size: 0.78rem; opacity: 0.8; margin-top: 0.2rem;">{desc}</div>
-        <div class="kanban-meta">
-            <span>👤 {responsavel}</span>
-            <span>📅 {dt_inicio}</span>
-        </div>
-    </div>
-    """
-
-
-# Quadro Kanban sem a coluna "Não informado"
-def render_kanban_board(frame: pd.DataFrame) -> None:
-    st.markdown('<div class="section-label">Quadro Kanban de Melhorias</div>', unsafe_allow_html=True)
-    
-    columns_config = [
-        {"title": "Próximas entregas", "color": "#f59e0b", "bg": "#f59e0b18"},
-        {"title": "Em desenvolvimento", "color": "#3b82f6", "bg": "#3b82f618"},
-        {"title": "Em validação", "color": "#8b5cf6", "bg": "#8b5cf618"},
-        {"title": "Concluída", "color": "#10b981", "bg": "#10b98118"},
-    ]
-
-    cols = st.columns(len(columns_config))
-    CARDS_LIMITE_INICIAL = 3  # Número de cards visíveis diretamente antes de recolher
-
-    for col, cfg in zip(cols, columns_config):
-        status_name = cfg["title"]
-        items = frame[frame["Status"] == status_name]
-        
-        with col:
-            st.markdown(
-                f"""
-                <div style="background:{cfg['bg']}; border-top: 3px solid {cfg['color']}; padding: 8px 12px; border-radius: 8px 8px 0 0; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-weight: 700; font-size: 0.88rem;">{status_name}</span>
-                    <span style="background: {cfg['color']}; color: white; border-radius: 12px; padding: 2px 8px; font-size: 0.72rem; font-weight: 700;">{len(items)}</span>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-            
-            if items.empty:
-                st.caption("Nenhum item")
-            else:
-                visible_items = items.iloc[:CARDS_LIMITE_INICIAL]
-                hidden_items = items.iloc[CARDS_LIMITE_INICIAL:]
-                
-                for _, row in visible_items.iterrows():
-                    st.markdown(render_kanban_card(row), unsafe_allow_html=True)
-                
-                if not hidden_items.empty:
-                    with st.expander(f"➕ Ver mais {len(hidden_items)} item(ns)", expanded=False):
-                        for _, row in hidden_items.iterrows():
-                            st.markdown(render_kanban_card(row), unsafe_allow_html=True)
-
-
 # Desenha a seção de Melhorias
 def render_improvements(frame: pd.DataFrame) -> None:
     start_values = frame["Início"].dropna()
@@ -563,14 +562,12 @@ def render_improvements(frame: pd.DataFrame) -> None:
         st.info("Nenhuma melhoria encontrada para os filtros selecionados.")
         return
 
-    # Métricas
     total = len(frame)
     completed = int(frame["Status"].eq("Concluída").sum())
     developing = int(frame["Status"].eq("Em desenvolvimento").sum())
     validation = int(frame["Status"].eq("Em validação").sum())
     upcoming = int(frame["Status"].eq("Próximas entregas").sum())
 
-    # 1. Indicadores (KPIs)
     st.markdown('<div class="section-label">Indicadores executivos</div>', unsafe_allow_html=True)
     overview = st.columns(5)
     overview[0].metric("Total de melhorias", format_number(total))
@@ -579,7 +576,6 @@ def render_improvements(frame: pd.DataFrame) -> None:
     overview[3].metric("Em validação", format_number(validation))
     overview[4].metric("Próximas entregas", format_number(upcoming))
 
-    # 2. Volume por status (Gráfico) - Sem "Não informado"
     st.markdown('<div class="section-label">Acompanhamento por status</div>', unsafe_allow_html=True)
     status_counts = pd.DataFrame({
         "Status": ["Concluída", "Em desenvolvimento", "Em validação", "Próximas entregas"],
@@ -599,10 +595,8 @@ def render_improvements(frame: pd.DataFrame) -> None:
     status_chart.update_traces(texttemplate="%{y:.0f}", textposition="outside", textfont_size=11, cliponaxis=False)
     st.plotly_chart(chart_figure(status_chart), use_container_width=True)
 
-    # 3. Quadro Kanban Retrátil
     render_kanban_board(frame)
 
-    # 4. Gráficos de Categoria e Prioridade
     st.markdown('<div class="section-label">Análise de Categoria e Prioridade</div>', unsafe_allow_html=True)
     left, right = st.columns(2)
     with left:
@@ -648,7 +642,6 @@ def render_improvements(frame: pd.DataFrame) -> None:
         )
         st.plotly_chart(chart_figure(priority_chart), use_container_width=True)
 
-    # 5. Exportação
     st.markdown("---")
     table_to_export = frame[IMPROVEMENT_COLUMNS].copy()
     for col in ["Início", "Fim"]:
@@ -695,7 +688,10 @@ def main() -> None:
     inject_styles()
     improvements, incidents, updates, errors = prepare_data()
     
-    st.markdown('<div class="hero"><div class="eyebrow">OMNI / Acompanhamento</div><h1>Painel de acompanhamento de atividades OMNI Sesi</h1><p>Visão executiva do portfólio de melhorias e da operação de incidentes com fontes atualizadas.</p></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="hero"><div class="eyebrow">OMNI / Acompanhamento</div><h1>Painel de acompanhamento de atividades OMNI Sesi</h1><p>Visão executiva do portfólio de melhorias e da operação de incidentes com fontes atualizadas.</p></div>',
+        unsafe_allow_html=True,
+    )
     
     for error in errors:
         st.warning(error)
