@@ -106,15 +106,26 @@ def inject_styles() -> None:
             z-index: 99 !important;
         }
 
+        /* 2. Oculta rodapé, badges, botão de gerenciar e popup de criador/perfil */
         footer, 
         [data-testid="stFooter"], 
         [data-testid="stStatusWidget"], 
         [data-testid="stAppCreatorBadge"], 
         [data-testid="stAppViewerBadge"],
+        [data-testid="manage-app-button"],
         .stAppBadge, 
         div[class*="viewerBadge"],
+        div[class*="creatorBadge"],
+        div[class*="ProfileBadge"],
+        div[class*="floatingContainer"],
         #creatorIndicator,
-        #viewerBadge {
+        #viewerBadge,
+        div:has(> button[aria-label="Manage app"]),
+        div:has(> a[href*="streamlit.io/user"]),
+        div:has(> button[aria-label="View profile"]),
+        div[style*="bottom: 0"][style*="right: 0"]:has(button),
+        div[style*="bottom: 0px"][style*="right: 0px"]:has(button),
+        div[style*="bottom: 0"][style*="right: 0"]:has(svg) {
             display: none !important;
             visibility: hidden !important;
             opacity: 0 !important;
@@ -128,7 +139,7 @@ def inject_styles() -> None:
             padding-top: 1.5rem !important; 
         }
 
-        /* 2. Barra lateral compacta, esguia e organizada */
+        /* 3. Barra lateral compacta, esguia e organizada */
         [data-testid="stSidebar"] {
             min-width: 260px !important;
             max-width: 275px !important;
@@ -140,7 +151,6 @@ def inject_styles() -> None:
             padding: 1rem 0.75rem 1.5rem 0.75rem !important;
         }
 
-        /* Reduz espaçamento vertical entre filtros da sidebar */
         [data-testid="stSidebar"] [data-testid="stElementContainer"] {
             margin-bottom: 0.25rem !important;
         }
@@ -164,7 +174,7 @@ def inject_styles() -> None:
             height: 1.95rem !important;
         }
 
-        /* 3. BOTÃO DE REABRIR A SIDEBAR SEMPRE VISÍVEL COM DESTAQUE */
+        /* 4. Botão de reabrir a sidebar sempre visível com destaque */
         [data-testid="stSidebarCollapsedControl"] {
             display: flex !important;
             visibility: visible !important;
@@ -838,7 +848,7 @@ def render_improvements(frame: pd.DataFrame) -> None:
     in_progress_rate = ((completed + validation + developing) / total * 100) if total > 0 else 0
 
     # 1. Indicadores Executivos (com % de Conclusão)
-    st.markdown('<div class="section-label">Indicadores executivos</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">Indicadores Gerais</div>', unsafe_allow_html=True)
     overview = st.columns(6)
     overview[0].metric("Total", format_number(total))
     overview[1].metric("Concluídas", format_number(completed))
@@ -857,7 +867,7 @@ def render_improvements(frame: pd.DataFrame) -> None:
         f"""
         <div style="margin: 0.75rem 0 1.25rem 0;">
             <div style="display: flex; justify-content: space-between; font-size: 0.76rem; font-weight: 700; margin-bottom: 0.35rem;">
-                <span>Progresso do Portfólio ({in_progress_rate:.1f}% em andamento ou concluído)</span>
+                <span>Progresso das Melhorias ({in_progress_rate:.1f}% em andamento ou concluído)</span>
                 <span style="color: #10b981;">{completion_rate:.1f}% Concluído</span>
             </div>
             <div style="height: 10px; width: 100%; background: rgba(128, 128, 128, 0.2); border-radius: 6px; overflow: hidden; display: flex;">
