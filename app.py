@@ -381,7 +381,7 @@ def normalize_improvement_status(value: object) -> str:
         return "Concluída"
     if any(term in key for term in ["desenvolv", "andamento", "execucao", "fazendo", "progresso"]):
         return "Em desenvolvimento"
-    if "homolog" in key or "validac" in key:
+    if any(term in key for term in ["Em validação", "valida", "validad", "Homologação", "Em Homologação", "Teste", "Testando", "Testes"]):
         return "Em validação"
     return "Próximas entregas"
 
