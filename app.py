@@ -30,8 +30,8 @@ MAX_PAYLOAD_BYTES = 50 * 1024 * 1024  # Limite de segurança de 50 MB
 # Mapeamento oficial de cores por status
 STATUS_COLOR_MAP = {
     "Próximas entregas": "#f59e0b",
-    "Em desenvolvimento": "#3b82f6",
-    "Em validação": "#8b5cf6",
+    "Desenvolvimento": "#3b82f6",
+    "Validação": "#8b5cf6",
     "Concluída": "#10b981",
 }
 
@@ -380,9 +380,9 @@ def normalize_improvement_status(value: object) -> str:
     if any(term in key for term in ["conclu", "finaliz", "encerr", "resolvid"]):
         return "Concluída"
     if any(term in key for term in ["desenvolv", "andamento", "execucao", "fazendo", "progresso"]):
-        return "Em desenvolvimento"
-    if any(term in key for term in ["Em validação", "valida", "validad", "Homologação", "Em Homologação", "Teste", "Testando", "Testes"]):
-        return "Em validação"
+        return "Desenvolvimento"
+    if any(term in key for term in ["validação", "valida", "validad", "Homologação", "Em Homologação", "Teste", "Testando", "Testes"]):
+        return "Validação"
     return "Próximas entregas"
 
 
@@ -688,9 +688,9 @@ def render_kanban_board(frame: pd.DataFrame) -> None:
     st.markdown('<div class="section-label">Quadro Kanban de Melhorias</div>', unsafe_allow_html=True)
     
     columns_config = [
-        {"title": "Próximas entregas", "color": "#f59e0b", "bg": "#f59e0b18"},
-        {"title": "Em desenvolvimento", "color": "#3b82f6", "bg": "#3b82f618"},
-        {"title": "Em validação", "color": "#8b5cf6", "bg": "#8b5cf618"},
+        {"title": "Documentação", "color": "#f59e0b", "bg": "#f59e0b18"},
+        {"title": "Desenvolvimento", "color": "#3b82f6", "bg": "#3b82f618"},
+        {"title": "Validação", "color": "#8b5cf6", "bg": "#8b5cf618"},
         {"title": "Concluída", "color": "#10b981", "bg": "#10b98118"},
     ]
 
@@ -839,9 +839,9 @@ def render_improvements(frame: pd.DataFrame) -> None:
 
     total = len(frame)
     completed = int(frame["Status"].eq("Concluída").sum())
-    developing = int(frame["Status"].eq("Em desenvolvimento").sum())
-    validation = int(frame["Status"].eq("Em validação").sum())
-    upcoming = int(frame["Status"].eq("Próximas entregas").sum())
+    developing = int(frame["Status"].eq("Desenvolvimento").sum())
+    validation = int(frame["Status"].eq("Validação").sum())
+    upcoming = int(frame["Status"].eq("Documentação").sum())
     
     # Cálculo das porcentagens de avanço
     completion_rate = (completed / total * 100) if total > 0 else 0
@@ -852,9 +852,9 @@ def render_improvements(frame: pd.DataFrame) -> None:
     overview = st.columns(6)
     overview[0].metric("Total", format_number(total))
     overview[1].metric("Concluídas", format_number(completed))
-    overview[2].metric("Em validação", format_number(validation))
-    overview[3].metric("Em andamento", format_number(developing))
-    overview[4].metric("Backlog", format_number(upcoming))
+    overview[2].metric("Validação", format_number(validation))
+    overview[3].metric("Desenvolvimento", format_number(developing))
+    overview[4].metric("Documentação", format_number(upcoming))
     overview[5].metric("Taxa de Entrega", f"{completion_rate:.1f}%", help="Percentual de melhorias entregues em relação ao total")
 
     # 2. Barra de Progresso Executiva Multi-Estágio
@@ -872,9 +872,9 @@ def render_improvements(frame: pd.DataFrame) -> None:
             </div>
             <div style="height: 10px; width: 100%; background: rgba(128, 128, 128, 0.2); border-radius: 6px; overflow: hidden; display: flex;">
                 <div style="width: {pct_concl}%; background-color: #10b981;" title="Concluídas: {pct_concl:.1f}%"></div>
-                <div style="width: {pct_val}%; background-color: #8b5cf6;" title="Em validação: {pct_val:.1f}%"></div>
-                <div style="width: {pct_dev}%; background-color: #3b82f6;" title="Em desenvolvimento: {pct_dev:.1f}%"></div>
-                <div style="width: {pct_upc}%; background-color: #f59e0b;" title="Próximas entregas: {pct_upc:.1f}%"></div>
+                <div style="width: {pct_val}%; background-color: #8b5cf6;" title="Validação: {pct_val:.1f}%"></div>
+                <div style="width: {pct_dev}%; background-color: #3b82f6;" title="Fesenvolvimento: {pct_dev:.1f}%"></div>
+                <div style="width: {pct_upc}%; background-color: #f59e0b;" title="Documentação: {pct_upc:.1f}%"></div>
             </div>
         </div>
         """,
@@ -887,7 +887,7 @@ def render_improvements(frame: pd.DataFrame) -> None:
     # 4. Volume atual por status
     st.markdown('<div class="section-label">Acompanhamento por status</div>', unsafe_allow_html=True)
     status_counts = pd.DataFrame({
-        "Status": ["Concluída", "Em desenvolvimento", "Em validação", "Próximas entregas"],
+        "Status": ["Concluída", "Desenvolvimento", "Validação", "Documentação"],
         "Quantidade": [completed, developing, validation, upcoming]
     })
     status_counts = status_counts[status_counts["Quantidade"] > 0]
@@ -899,7 +899,7 @@ def render_improvements(frame: pd.DataFrame) -> None:
         text="Quantidade",
         title="Volume atual por status",
         color="Status",
-        color_discrete_map={"Concluída": "#10b981", "Em desenvolvimento": "#3b82f6", "Em validação": "#8b5cf6", "Próximas entregas": "#f59e0b"},
+        color_discrete_map={"Concluída": "#10b981", "Desenvolvimento": "#3b82f6", "Validação": "#8b5cf6", "Documentação": "#f59e0b"},
     )
     status_chart.update_traces(texttemplate="%{y:.0f}", textposition="outside", textfont_size=11, cliponaxis=False)
     st.plotly_chart(chart_figure(status_chart), use_container_width=True)
