@@ -29,7 +29,7 @@ MAX_PAYLOAD_BYTES = 50 * 1024 * 1024  # Limite de segurança de 50 MB
 
 # Mapeamento oficial de cores por status
 STATUS_COLOR_MAP = {
-    "Próximas entregas": "#f59e0b",
+    "Documentação": "#f59e0b",
     "Desenvolvimento": "#3b82f6",
     "Validação": "#8b5cf6",
     "Concluída": "#10b981",
@@ -373,17 +373,17 @@ def canonical(value: object) -> str:
 
 def normalize_improvement_status(value: object) -> str:
     if pd.isna(value):
-        return "Próximas entregas"
+        return "Documentação"
     key = canonical(value)
     if not key:
-        return "Próximas entregas"
+        return "Documentação"
     if any(term in key for term in ["conclu", "finaliz", "encerr", "resolvid"]):
         return "Concluída"
     if any(term in key for term in ["desenvolv", "andamento", "execucao", "fazendo", "progresso"]):
         return "Desenvolvimento"
     if any(term in key for term in ["validação", "valida", "validad", "Homologação", "Em Homologação", "Teste", "Testando", "Testes"]):
         return "Validação"
-    return "Próximas entregas"
+    return "Documentação"
 
 
 def parse_improvement_date(value: object) -> pd.Timestamp:
@@ -572,7 +572,7 @@ def render_modal_content(row: pd.Series) -> None:
     melhoria = html.escape(str(row["Melhoria"]))
     categoria = html.escape(str(row["Categoria"] or "Geral"))
     prioridade = html.escape(str(row["Prioridade"] or "Normal"))
-    status = html.escape(str(row["Status"] or "Próximas entregas"))
+    status = html.escape(str(row["Status"] or "Documentação"))
     responsavel = html.escape(str(row["Profissional alocado"] or "Não atribuído"))
     desc = str(row["Descrição"]) if row["Descrição"] else "Nenhuma descrição detalhada informada."
     
